@@ -210,7 +210,7 @@ var ENUM_CHART_COLOR
 
 `enum`은, ECMAScript에서 지원하는 표준 문법이 아닙니다. 타입스크립트에서 자체적으로 구현한 문법입니다. 자바스크립트에서 존재하지 않는 것을 구현하기 위해 타입스크립트 컴파일러는 `즉시 실행 함수`를 포함한 코드를 생성합니다. 그런데 [Rollup](https://rollupjs.org/guide/en/)과 같은 번들러는 즉시 실행 함수를 '사용하지 않는 코드'라고 판단할 수 없어서 `Tree-shaking`이 되지 않습니다.
 
-> ✏️`Tree-Shaking`이란?
+> ✏️Tree-Shaking이란?
 >
 > 코드 최적화 과정에서 적용되는 *사용하지 않은 코드 제거*를 의미합니다. Tree-shaking은 번들(bundle)의 시작 지점에서 시작하여 실행될 수 있는 함수만 포함하고 나머지 미사용 함수를 제거함으로써 번들 전체에서 사용되지 않는 함수를 제거합니다.
 >
@@ -228,19 +228,19 @@ Tree-shaking의 관점에서 살펴보면, 코드의 번들 사이즈는 _`Union
 
 > ※ 이 글이 쓰여진 시점은 타입스크립트의 버전이 3.8.2일 당시임을 미리 작성합니다.
 >
-> `1. const enum은 Babel로 전송할 수 없습니다.`
-> 이 문제에 대해서는 현재 [두 개의 workaround가](https://babeljs.io/docs/en/babel-plugin-transform-typescript#caveats) 있습니다. 하나는 const enum을 일반 enum으로 다시 쓰는 것, 다른 하나는 `babel-plugin-const-enum`플러그인을 사용하여 전송 과정에서 자동으로 수행하는 것입니다.
+> `1. const enum은 Babel로 전송할 수 없습니다.`<br/>
+> 이 문제에 대해서는 현재 [두 개의 workaround가](https://babeljs.io/docs/en/babel-plugin-transform-typescript#caveats) 있습니다. 하나는 const enum을 일반 enum으로 다시 쓰는 것, 다른 하나는 babel-plugin-const-enum플러그인을 사용하여 전송 과정에서 자동으로 수행하는 것입니다.
 >
-> `2. 앰비언트 컨텍스트에서 const enum을 사용하면 문제가 될 수 있습니다.`
-> 앰비언트 컨텍스트란 *타입스크립트에서 선언만 하고 실제 구현은 다른 곳에서 제공되는 코드 환경*을 가리킵니다. 일반적으로 외부 라이브러리나 프레임워크의 유형 정의를 선언할 때 사용됩니다( `_.d.ts`파일 안이나 `declare`구문처럼).
+> `2. 앰비언트 컨텍스트에서 const enum을 사용하면 문제가 될 수 있습니다.`<br/>
+> 앰비언트 컨텍스트란 *타입스크립트에서 선언만 하고 실제 구현은 다른 곳에서 제공되는 코드 환경*을 가리킵니다. 일반적으로 외부 라이브러리나 프레임워크의 유형 정의를 선언할 때 사용됩니다( \_.d.ts파일 안이나 declare구문처럼).
 >
-> `--isolatedModules`컴파일 옵션을 활성화하면 앰비언트 컨텍스트에서 선언된 const enum에 다른 모듈(다른 파일)에서 액세스하면 컴파일 오류가 발생합니다. const enum을 내부적으로 밖에 이용하지 않고, 그 코드가 컴파일 될 때의 옵션을 100% 제어할 수 있으면 좋지만, 그렇지 않으면 문제가 됩니다.
+> --isolatedModules 컴파일 옵션을 활성화하면 앰비언트 컨텍스트에서 선언된 const enum에 다른 모듈(다른 파일)에서 액세스하면 컴파일 오류가 발생합니다. const enum을 내부적으로 밖에 이용하지 않고, 그 코드가 컴파일 될 때의 옵션을 100% 제어할 수 있으면 좋지만, 그렇지 않으면 문제가 됩니다.
 >
 > npm에 공개하는 것으로 const enum를 export 하는 것에 관해서는 명확하게 잘못이라고 말할 수 있습니다 . 타입스크립트팀의 멤버도 이를 바탕으로 [“const enum on DT really does not make sense”](https://github.com/microsoft/TypeScript/issues/20703#issuecomment-361434795) (DT는 DefinitelyTyped)이며, 앰비언트 컨텍스트에서는 [“You should use a union type of literals (string or number) instead.”](https://github.com/microsoft/TypeScript/issues/20703#issuecomment-362005736) 라고 말합니다.
 >
-> `3. --isolatedModules이 유효한 경우의 const enum의 동작은 앰비언트 컨텍스트 밖에서도 이상합니다.`
+> `3. --isolatedModules이 유효한 경우의 const enum의 동작은 앰비언트 컨텍스트 밖에서도 이상합니다.`<br/>
 >
-> GitHub의 [코멘트를](https://github.com/babel/babel/issues/8741#issuecomment-470485894) 읽고 알았는데, `--isolatedModules`을 활성화하고 const enum을 컴파일하면 다음과 같이 나타납니다.
+> GitHub의 [코멘트를](https://github.com/babel/babel/issues/8741#issuecomment-470485894) 읽고 알았는데, --isolatedModules을 활성화하고 const enum을 컴파일하면 다음과 같이 나타납니다.
 >
 > 컴파일 전:
 >
@@ -276,7 +276,7 @@ Tree-shaking의 관점에서 살펴보면, 코드의 번들 사이즈는 _`Union
 > //# sourceMappingURL=b.js.map
 > ```
 >
-> `--isolatedModules`는 컴파일을 1모듈(1파일)씩 실시할 수 있도록 하는 옵션이므로 const enum의 출력 결과가 통상의 enum과 같이 되는 것은 범위내라는 가정하에 있습니다. 다른 모듈(다른 파일)에 존재하는 const enum 정의 원래 정보를 참조할 수 없는 상황에서는 const enum의 원래 동작인 인라인화를 실현할 수 없습니다.
+> --isolatedModules는 컴파일을 1모듈(1파일)씩 실시할 수 있도록 하는 옵션이므로 const enum의 출력 결과가 통상의 enum과 같이 되는 것은 범위내라는 가정하에 있습니다. 다른 모듈(다른 파일)에 존재하는 const enum 정의 원래 정보를 참조할 수 없는 상황에서는 const enum의 원래 동작인 인라인화를 실현할 수 없습니다.
 
 추가적으로, const enum으로 작성된 코드는 자바스크립트로 트랜스파일 시 문자열을 유니코드로 변환하기 때문에, 빌드 코드가 길어질 수 있다는 단점이 있습니다.
 
