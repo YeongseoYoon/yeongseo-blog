@@ -6,8 +6,8 @@ const siteMetadata = {
   description: '웹 프론트엔드 개발자 윤영서입니다.',
   language: 'ko-kr',
   theme: 'system', // system, dark or light
-  siteUrl: 'https://www.dev-bbak.site/',
-  siteRepo: 'https://github.com/timlrx/tailwind-nextjs-starter-blog',
+  siteUrl: 'https://yeongseo-blog.vercel.app/',
+  siteRepo: 'https://github.com/YeongseoYoon/yeongseo-blog',
   siteLogo: '/static/images/logo.png',
   socialBanner: '/static/images/twitter-card.png',
   mastodon: 'https://mastodon.social/@mastodonuser',
