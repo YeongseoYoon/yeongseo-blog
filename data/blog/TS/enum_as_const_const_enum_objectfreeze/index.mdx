@@ -301,15 +301,15 @@ const isJugem =
 
 [typescript 공식문서](https://www.typescriptlang.org/ko/docs/handbook/enums.html#const-%EC%97%B4%EA%B1%B0%ED%98%95-const-enums)에서는 다음과 같이 이야기 하고 있습니다.
 
-> In modern TypeScript, you may not need an enum when an object with `as const` could suffice:
+> In modern TypeScript, you may not need an enum when an object with as const could suffice:
 >
 > The biggest argument in favour of this format over is that it keeps your codebase aligned with the state of JavaScript, and [when/if](https://github.com/rbuckton/proposal-enum) enums are added to JavaScript then you can move to the additional syntax.
 >
-> 현대의 TypeScript에서는 객체에 `as const`를 사용하여 상수를 정의할 때 열거형(enum)이 필요하지 않을 수 있습니다:
+> 현대의 TypeScript에서는 객체에 as const를 사용하여 상수를 정의할 때 열거형(enum)이 필요하지 않을 수 있습니다:
 >
 > 이 방식을 선호하는 가장 큰 이유는 JavaScript의 현재 상태와 코드베이스를 일치시키는 데 있습니다. 그리고 만약 JavaScript에 나중에 열거형이 추가된다면, 그 때 추가적인 구문으로 전환할 수 있을 것입니다.
 
-자바스크립트의 superset이라는 타입스크립트의 컨셉에서도 벗어나지 않고, Tree-shaking관점에서도 벗어나지 않는 `as const`와 `keyof`키워드를 사용해 코드를 작성하면, 다음처럼 가능합니다.
+자바스크립트의 superset이라는 타입스크립트의 컨셉에서도 벗어나지 않고, Tree-shaking관점에서도 벗어나지 않는 as const와 keyof키워드를 사용해 코드를 작성하면, 다음처럼 가능합니다.
 
 ```ts
 const CHART_COLOR = {
