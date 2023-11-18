@@ -18,14 +18,14 @@ const CHART_COLOR = {
   AREA: '#EC8090',
   BAR: '#9EA1FF',
   FILTERED_BAR: '#4548a2',
-} as const
+} as const;
 
 //Object.freeze
 const FREEZED_CHART_COLOR = Object.freeze({
   AREA: '#EC8090',
   BAR: '#9EA1FF',
   FILTERED_BAR: '#4548a2',
-})
+});
 
 //enum
 enum ENUM_CHART_COLOR {
@@ -73,17 +73,17 @@ const enum CONST_ENUM_CHART_COLOR
 ```ts
 //as const
 const CHART_COLOR: {
-  readonly AREA: '#EC8090'
-  readonly BAR: '#9EA1FF'
-  readonly FILTERED_BAR: '#4548a2'
-}
+  readonly AREA: '#EC8090';
+  readonly BAR: '#9EA1FF';
+  readonly FILTERED_BAR: '#4548a2';
+};
 
 //Object.freeze
 const FREEZED_CHART_COLOR: Readonly<{
-  AREA: '#EC8090'
-  BAR: '#9EA1FF'
-  FILTERED_BAR: '#4548a2'
-}>
+  AREA: '#EC8090';
+  BAR: '#9EA1FF';
+  FILTERED_BAR: '#4548a2';
+}>;
 ```
 
 두 방식 모두 `readonly`라는 키워드를 볼 수 있는데, 어떤 부분이 다른 것일까요?
@@ -95,31 +95,31 @@ const FREEZED_CHART_COLOR: Readonly<{
 ```ts
 //typescript 4.7.4 이전 버전
 const FREEZED_CHART_COLOR: Readonly<{
-  AREA: string
-  BAR: string
+  AREA: string;
+  BAR: string;
   FILTERED_BAR: {
-    DARK: string
-  }
-}>
+    DARK: string;
+  };
+}>;
 
 //typescript 4.7.4 이후 버전
 const FREEZED_CHART_COLOR: Readonly<{
-  AREA: '#EC8090'
-  BAR: '#9EA1FF'
+  AREA: '#EC8090';
+  BAR: '#9EA1FF';
   FILTERED_BAR: {
-    DARK: string
-  }
-}>
+    DARK: string;
+  };
+}>;
 ```
 
 게다가 `Object.freeze()`로 동결된 객체를 변경하려 하면, `런타임` 때 오류가 발생합니다.
 
 ```ts
-FREEZED_CHART_COLOR.BAR = '다크' //런타임때 오류
-CHART_COLOR.BAR = '다크' //컴파일시만 오류
+FREEZED_CHART_COLOR.BAR = '다크'; //런타임때 오류
+CHART_COLOR.BAR = '다크'; //컴파일시만 오류
 
-console.log(FREEZED_CHART_COLOR.BAR) //런타임 오류로 변경 안됨
-console.log(CHART_COLOR.BAR) //컴파일시만 오류, 런타임때는 정상 진행되어 "다크" 출력
+console.log(FREEZED_CHART_COLOR.BAR); //런타임 오류로 변경 안됨
+console.log(CHART_COLOR.BAR); //컴파일시만 오류, 런타임때는 정상 진행되어 "다크" 출력
 ```
 
 중첩된 객체를 통해 살펴보면, 둘의 차이는 더욱더 분명해집니다.
@@ -131,16 +131,16 @@ const CHART_COLOR = {
   FILTERED_BAR: {
     DARK: '#4548a2',
   },
-} as const
+} as const;
 
 //as const의 타입
 const CHART_COLOR: {
-  readonly AREA: '#EC8090'
-  readonly BAR: '#9EA1FF'
+  readonly AREA: '#EC8090';
+  readonly BAR: '#9EA1FF';
   readonly FILTERED_BAR: {
-    readonly DARK: '#4548a2'
-  }
-}
+    readonly DARK: '#4548a2';
+  };
+};
 
 const FREEZED_CHART_COLOR = Object.freeze({
   AREA: '#EC8090',
@@ -148,16 +148,16 @@ const FREEZED_CHART_COLOR = Object.freeze({
   FILTERED_BAR: {
     DARK: '#4548a2',
   },
-})
+});
 
 //Object.freeze의 타입
 const FREEZED_CHART_COLOR: Readonly<{
-  AREA: '#EC8090'
-  BAR: '#9EA1FF'
+  AREA: '#EC8090';
+  BAR: '#9EA1FF';
   FILTERED_BAR: {
-    DARK: string
-  }
-}>
+    DARK: string;
+  };
+}>;
 ```
 
 위와 같이, 중첩된 객체의 `타입 추론`적인 부분에서 생각을 하게 되면, `Object.freeze()` 보다는 `as const`가 더 적절해 보입니다. 리터럴 타입으로 타입 좁히기가 가능해지기 때문입니다.
@@ -173,10 +173,10 @@ enum Enum {
   A,
 }
 
-let a = Enum.A
-let nameOfA = Enum[a]
-console.log(a) //0
-console.log(nameOfA) // "A"
+let a = Enum.A;
+let nameOfA = Enum[a];
+console.log(a); //0
+console.log(nameOfA); // "A"
 ```
 
 다음과 같은 enum과 const enum 코드가 있습니다.
@@ -200,12 +200,12 @@ const enum CONST_ENUM_CHART_COLOR {
 이를 트랜스파일하면 다음과 같은 자바스크립트 코드가 생성됩니다.
 
 ```ts
-var ENUM_CHART_COLOR
-;(function (ENUM_CHART_COLOR) {
-  ENUM_CHART_COLOR['AREA'] = '#EC8090'
-  ENUM_CHART_COLOR['BAR'] = '#9EA1FF'
-  ENUM_CHART_COLOR['FILTERED_BAR'] = '#4548a2'
-})(ENUM_CHART_COLOR || (ENUM_CHART_COLOR = {}))
+var ENUM_CHART_COLOR;
+(function (ENUM_CHART_COLOR) {
+  ENUM_CHART_COLOR['AREA'] = '#EC8090';
+  ENUM_CHART_COLOR['BAR'] = '#9EA1FF';
+  ENUM_CHART_COLOR['FILTERED_BAR'] = '#4548a2';
+})(ENUM_CHART_COLOR || (ENUM_CHART_COLOR = {}));
 ```
 
 `enum`은, ECMAScript에서 지원하는 표준 문법이 아닙니다. 타입스크립트에서 자체적으로 구현한 문법입니다. 자바스크립트에서 존재하지 않는 것을 구현하기 위해 타입스크립트 컴파일러는 `즉시 실행 함수`를 포함한 코드를 생성합니다. 그런데 [Rollup](https://rollupjs.org/guide/en/)과 같은 번들러는 즉시 실행 함수를 '사용하지 않는 코드'라고 판단할 수 없어서 `Tree-shaking`이 되지 않습니다.
@@ -253,26 +253,26 @@ Tree-shaking의 관점에서 살펴보면, 코드의 번들 사이즈는 _`Union
 > }
 >
 > /// b.ts
-> import { A } from './a'
+> import { A } from './a';
 >
-> console.log(A.B, A.C)
+> console.log(A.B, A.C);
 > ```
 >
 > 컴파일 후:
 >
 > ```ts
 > /// a.js
-> export var A
-> ;(function (A) {
->   A[(A['B'] = 0)] = 'B'
-> })(A || (A = {}))
-> ;(function (A) {
->   A[(A['C'] = 2)] = 'C'
-> })(A || (A = {}))
+> export var A;
+> (function (A) {
+>   A[(A['B'] = 0)] = 'B';
+> })(A || (A = {}));
+> (function (A) {
+>   A[(A['C'] = 2)] = 'C';
+> })(A || (A = {}));
 > //# sourceMappingURL=a.js.map
 >
 > /// b.js
-> console.log(A.B, A.C)
+> console.log(A.B, A.C);
 > //# sourceMappingURL=b.js.map
 > ```
 >
@@ -287,12 +287,12 @@ const enum NAME {
   TARO = '다로',
   JIRO = '지로',
 }
-const isJugem = name === NAME.JUGEM
+const isJugem = name === NAME.JUGEM;
 
 // JavaScript 트랜스파일 후
 const isJugem =
   name ===
-  'u5BFFu9650u7121u5BFFu9650u7121u4E94u52ABu306Eu64E6u308Au5207u308Cu6D77u7802u5229u6C34u9B5Au306Eu2026' /* JUGEM */
+  'u5BFFu9650u7121u5BFFu9650u7121u4E94u52ABu306Eu64E6u308Au5207u308Cu6D77u7802u5229u6C34u9B5Au306Eu2026'; /* JUGEM */
 ```
 
 그렇다면, Enum의 대체제는 없을까요?
@@ -316,12 +316,12 @@ const CHART_COLOR = {
   AREA: '#EC8090',
   BAR: '#9EA1FF',
   FILTERED_BAR: '#4548a2',
-} as const
+} as const;
 
-type CHART_COLOR_TYPE = (typeof CHART_COLOR)[keyof typeof CHART_COLOR]
+type CHART_COLOR_TYPE = (typeof CHART_COLOR)[keyof typeof CHART_COLOR];
 
 //CHART_COLOR_TYPE의 타입
-type CHART_COLOR_TYPE = '#EC8090' | '#9EA1FF' | '#4548a2'
+type CHART_COLOR_TYPE = '#EC8090' | '#9EA1FF' | '#4548a2';
 ```
 
 이와 같이, as const와 keyof키워드를 통해 union type을 생성하게 되면, enum과 비슷한 효과를 내고, 타입스크립트의 컨셉에 충실한 코드의 작성이 가능해집니다.

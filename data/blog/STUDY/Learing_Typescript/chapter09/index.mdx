@@ -26,7 +26,7 @@ tags: ['TS']
 
 ```ts
 function introduceMySelf(name: unknown) {
-  console.log(`Hello my name is ${name.toUpperCase()}`)
+  console.log(`Hello my name is ${name.toUpperCase()}`);
 }
 
 //unknown은 string 타입이 아니므로 타입 오류 발생!
@@ -38,14 +38,14 @@ function introduceMySelf(name: unknown) {
 ```ts
 function introduceMySelf(name: unknown) {
   if (typeof name === 'string') {
-    console.log(`Hello my name is ${name.toUpperCase()}`)
+    console.log(`Hello my name is ${name.toUpperCase()}`);
   } else {
-    console.log(`Bye~`)
+    console.log(`Bye~`);
   }
 }
 
-introduceMySelf('영서') //Hello my name is 영서
-introduceMySelf({}) //Bye~
+introduceMySelf('영서'); //Hello my name is 영서
+introduceMySelf({}); //Bye~
 ```
 
 # 타입 서술어(Type Predicate)
@@ -57,7 +57,7 @@ introduceMySelf({}) //Bye~
 타입 서술어는 다음과 같이 선언할 수 있습니다.
 
 ```ts
-function typePredicate(input: WideType): input is NarrowType
+function typePredicate(input: WideType): input is NarrowType;
 ```
 
 아래와 같이 사용하면
@@ -65,21 +65,21 @@ function typePredicate(input: WideType): input is NarrowType
 ```ts
 //매개변수의 타입이 top타입으므로 가장 넓은 타입임
 function typePredicate(input: unknown): input is string {
-  return ['number', 'string'].includes(typeof input)
+  return ['number', 'string'].includes(typeof input);
 }
 
 function logValueIfExists(input: number | string | undefined) {
   //string이나 number면 실행
   if (typePredicate(input)) {
-    console.log(input.toString())
+    console.log(input.toString());
   }
   //undefined면 실행
   else {
-    console.log('undefined')
+    console.log('undefined');
   }
 }
 
-logValueIfExists('10') //10
+logValueIfExists('10'); //10
 ```
 
 타입 서술어는 한 인터페이스의 인스턴스로 알려진 객체가 더 구체적인 인터페이스의 인스턴스인지 여부를 검사하는데 사용됩니다.<br/><br/>
@@ -91,12 +91,12 @@ logValueIfExists('10') //10
 
 ```ts
 interface Ratings {
-  audience: number
-  critics: number
+  audience: number;
+  critics: number;
 }
 
 function getRating(ratings: Ratings, key: string): number {
-  return ratings[key]
+  return ratings[key];
 }
 ```
 
@@ -109,7 +109,7 @@ function getRating(ratings: Ratings, key: string): number {
 
 ```ts
 function getRating(ratings: Ratings, key: 'audience' | 'critics'): number {
-  return ratings[key]
+  return ratings[key];
 }
 ```
 
@@ -119,7 +119,7 @@ function getRating(ratings: Ratings, key: 'audience' | 'critics'): number {
 
 ```ts
 function getRating(ratings: Ratings, key: keyof Ratings): number {
-  return ratings[key] // OK
+  return ratings[key]; // OK
 }
 ```
 
@@ -131,9 +131,9 @@ function getRating(ratings: Ratings, key: keyof Ratings): number {
 const original = {
   medium: 'movie',
   title: 'Mean Girls',
-}
+};
 
-let adaptation: typeof original
+let adaptation: typeof original;
 
 /* 
 //adaptation의 타입 
@@ -156,15 +156,15 @@ keyof, typeof 연산자를 함께 사용하면 값의 타입에 허용된 키를
 타입스크립트는 타입 시스템의 이해를 재정의하기 위한 구문으로 `타입 어서션(type assertion)`을 제공합니다. `JSON.parse()`의 경우, 의도적으로 any를 반환합니다. 이럴 때, 타입 시스템에 특정한 값 타입을 반환함을 알리기 위해 타입 어서션을 사용할 수 있습니다.
 
 ```ts
-const rawData = '["grace","frankie"]'
+const rawData = '["grace","frankie"]';
 
-const a = JSON.parse(rawData) //any
+const a = JSON.parse(rawData); //any
 
-const b = JSON.parse(rawData) as string[] //string[]
+const b = JSON.parse(rawData) as string[]; //string[]
 
-const c = JSON.parse(rawData) as [string, string] //[string,string]
+const c = JSON.parse(rawData) as [string, string]; //[string,string]
 
-const d = JSON.parse(rawData) as ['grace', 'frankie'] //['grace', 'frankie']
+const d = JSON.parse(rawData) as ['grace', 'frankie']; //['grace', 'frankie']
 ```
 
 그렇지만, 가능한 타입 어서션을 사용하지 않는 것이 좋습니다. 코드가 완전히 타입화되고 타입스크립트의 타입 이해를 방해하지 않는 것이 좋기 때문인데, 간혹 타입 어서션이 유용할 때가 있습니다.
@@ -196,9 +196,9 @@ try{
 어떤 특정한 변수에서 null과 undefined를 제거할때, null과 undefined를 제외한 값의 전체 타입을 작성하는 대신 `!`를 사용합니다. `non-null 어서션`은 타입이 null 또는 undefined가 아니라고 간주합니다.
 
 ```ts
-let maybeDate = Math.random() > 0.5 ? undefined : new Date()
+let maybeDate = Math.random() > 0.5 ? undefined : new Date();
 
-const date = maybeDate! //Date 타입
+const date = maybeDate!; //Date 타입
 ```
 
 이는 값을 반환하거나 존재하지 않는 경우 undefined를 반환하는 `Map.get`과 같은 API에서 유용합니다.
@@ -214,18 +214,18 @@ const date = maybeDate! //Date 타입
 
 ```ts
 interface Entertainer {
-  acts: string[]
-  name: string
+  acts: string[];
+  name: string;
 }
 
 const declared: Entertainer = {
   //에러 : Property 'acts' is missing in type '{ name: string; }' but required in type 'Entertainer'.
   name: 'Hay',
-}
+};
 
 const asserted = {
   name: 'Bay',
-} as Entertainer //허용되지만 런타임 시 오류 발생
+} as Entertainer; //허용되지만 런타임 시 오류 발생
 ```
 
 따라서 타입 애너테이션을 사용하거나 타입스크립트가 초깃값에서 변수의 타입을 유추하도록 하는 것이 매우 바람직합니다.
@@ -247,9 +247,9 @@ const asserted = {
 ## 원시 타입에서 리터럴으로
 
 ```ts
-const getName = () => 'Maria' // 타입 : () => string
+const getName = () => 'Maria'; // 타입 : () => string
 
-const getNameConst = () => 'Maria' as const // 타입 : () => "Maria"
+const getNameConst = () => 'Maria' as const; // 타입 : () => "Maria"
 ```
 
 ## 읽기 전용 객체
@@ -262,7 +262,7 @@ as const를 사용해 값 리터럴을 어서션하면 유추된 타입이 가�
 const preferenceReadonly = {
   movie: 'maybe',
   standup: 'yes',
-} as const
+} as const;
 /*
 preferenceReadonly 타입
 const preferenceReadonly: {

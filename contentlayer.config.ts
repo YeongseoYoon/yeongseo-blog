@@ -1,28 +1,28 @@
-import { defineDocumentType, ComputedFields, makeSource } from 'contentlayer/source-files'
-import { writeFileSync } from 'fs'
-import readingTime from 'reading-time'
-import GithubSlugger from 'github-slugger'
-import path from 'path'
+import { defineDocumentType, ComputedFields, makeSource } from 'contentlayer/source-files';
+import { writeFileSync } from 'fs';
+import readingTime from 'reading-time';
+import GithubSlugger from 'github-slugger';
+import path from 'path';
 // Remark packages
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import {
   remarkExtractFrontmatter,
   remarkCodeTitles,
   remarkImgToJsx,
   extractTocHeadings,
-} from 'pliny/mdx-plugins/index.js'
+} from 'pliny/mdx-plugins/index.js';
 // Rehype packages
-import rehypeSlug from 'rehype-slug'
-import rehypeAutolinkHeadings from 'rehype-autolink-headings'
-import rehypeKatex from 'rehype-katex'
-import rehypeCitation from 'rehype-citation'
-import rehypePrismPlus from 'rehype-prism-plus'
-import rehypePresetMinify from 'rehype-preset-minify'
-import siteMetadata from './data/siteMetadata'
-import { allCoreContent, sortPosts } from 'pliny/utils/contentlayer.js'
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeKatex from 'rehype-katex';
+import rehypeCitation from 'rehype-citation';
+import rehypePrismPlus from 'rehype-prism-plus';
+import rehypePresetMinify from 'rehype-preset-minify';
+import siteMetadata from './data/siteMetadata';
+import { allCoreContent, sortPosts } from 'pliny/utils/contentlayer.js';
 
-const root = process.cwd()
+const root = process.cwd();
 
 const computedFields: ComputedFields = {
   readingTime: { type: 'json', resolve: (doc) => readingTime(doc.body.raw) },
@@ -39,26 +39,26 @@ const computedFields: ComputedFields = {
     resolve: (doc) => doc._raw.sourceFilePath,
   },
   toc: { type: 'string', resolve: (doc) => extractTocHeadings(doc.body.raw) },
-}
+};
 
 /**
  * Count the occurrences of all tags across blog posts and write to json file
  */
 function createTagCount(allBlogs) {
-  const tagCount: Record<string, number> = {}
+  const tagCount: Record<string, number> = {};
   allBlogs.forEach((file) => {
     if (file.tags && file.draft !== true) {
       file.tags.forEach((tag) => {
-        const formattedTag = GithubSlugger.slug(tag)
+        const formattedTag = GithubSlugger.slug(tag);
         if (formattedTag in tagCount) {
-          tagCount[formattedTag] += 1
+          tagCount[formattedTag] += 1;
         } else {
-          tagCount[formattedTag] = 1
+          tagCount[formattedTag] = 1;
         }
-      })
+      });
     }
-  })
-  writeFileSync('./app/tag-data.json', JSON.stringify(tagCount))
+  });
+  writeFileSync('./app/tag-data.json', JSON.stringify(tagCount));
 }
 
 function createSearchIndex(allBlogs) {
@@ -69,8 +69,8 @@ function createSearchIndex(allBlogs) {
     writeFileSync(
       `public/${siteMetadata.search.kbarConfig.searchDocumentsPath}`,
       JSON.stringify(allCoreContent(sortPosts(allBlogs)))
-    )
-    console.log('Local search index generated...')
+    );
+    console.log('Local search index generated...');
   }
 }
 
@@ -108,7 +108,7 @@ export const Blog = defineDocumentType(() => ({
       }),
     },
   },
-}))
+}));
 
 export const Authors = defineDocumentType(() => ({
   name: 'Authors',
@@ -126,7 +126,7 @@ export const Authors = defineDocumentType(() => ({
     layout: { type: 'string' },
   },
   computedFields,
-}))
+}));
 
 export default makeSource({
   contentDirPath: 'data',
@@ -150,8 +150,8 @@ export default makeSource({
     ],
   },
   onSuccess: async (importData) => {
-    const { allBlogs } = await importData()
-    createTagCount(allBlogs)
-    createSearchIndex(allBlogs)
+    const { allBlogs } = await importData();
+    createTagCount(allBlogs);
+    createSearchIndex(allBlogs);
   },
-})
+});

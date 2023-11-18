@@ -237,12 +237,12 @@ See [Next.js on Netlify](https://docs.netlify.com/integrations/frameworks/next-j
    ```ts
    /* eslint-disable jsx-a11y/alt-text */
    /* eslint-disable @next/next/no-img-element */
-   import NextImage, { ImageProps } from 'next/image'
+   import NextImage, { ImageProps } from 'next/image';
 
    // @ts-ignore
-   const Image = ({ ...rest }: ImageProps) => <img {...rest} />
+   const Image = ({ ...rest }: ImageProps) => <img {...rest} />;
 
-   export default Image
+   export default Image;
    ```
 
    Alternatively, to continue using `next/image`, you can use an alternative image optimization provider such as Imgix, Cloudinary or Akamai. See [image optimization documentation](https://nextjs.org/docs/app/building-your-application/deploying/static-exports#image-optimization) for more details.

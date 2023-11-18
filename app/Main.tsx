@@ -1,10 +1,10 @@
-import Link from '@/components/Link'
-import Tag from '@/components/Tag'
-import siteMetadata from '@/data/siteMetadata'
-import { formatDate } from 'pliny/utils/formatDate'
-import NewsletterForm from 'pliny/ui/NewsletterForm'
+import Link from '@/components/Link';
+import Tag from '@/components/Tag';
+import siteMetadata from '@/data/siteMetadata';
+import { formatDate } from 'pliny/utils/formatDate';
+import NewsletterForm from 'pliny/ui/NewsletterForm';
 
-const MAX_DISPLAY = 20
+const MAX_DISPLAY = 20;
 
 export default function Home({ posts }) {
   return (
@@ -21,7 +21,7 @@ export default function Home({ posts }) {
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {!posts.length && 'No posts found.'}
           {posts.slice(0, MAX_DISPLAY).map((post) => {
-            const { slug, date, title, summary, tags } = post
+            const { slug, date, title, summary, tags } = post;
             return (
               <li key={slug} className="py-12">
                 <article>
@@ -66,7 +66,7 @@ export default function Home({ posts }) {
                   </div>
                 </article>
               </li>
-            )
+            );
           })}
         </ul>
       </div>
@@ -87,5 +87,5 @@ export default function Home({ posts }) {
         </div>
       )}
     </>
-  )
+  );
 }
