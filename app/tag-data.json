@@ -1,11 +1,1 @@
-{
-  "react": 1,
-  "hook": 1,
-  "state": 1,
-  "tanstackquery": 1,
-  "test": 1,
-  "playwright": 1,
-  "memoir": 1,
-  "ts": 5,
-  "js": 1
-}
+{"typescript":1,"utility-types":1,"react":1,"hook":1,"state":1,"tanstackquery":1,"test":1,"playwright":1,"memoir":1,"ts":5,"js":1}
