@@ -1,83 +1,59 @@
 ---
-title: '원하는 타이밍에 쿼리 요청을 트리깅하기'
-date: '2024-04-12T10:42:22.881Z'
-summary: '쿼리키 알못의 고군분투기'
+title: 'refetch vs invalidateQueries'
+date: '2024-09-09T13:33:27.982Z'
+summary: '어떤점이 다를까?'
 tags: ['TANSTACKQUERY']
 ---
 
-저희 회사에는 다음과 같이 구현되어야하는 페이지가 존재합니다.
+`Tanstack Query(구 React Query)`를 사용하다 보면 데이터를 새로 가져와야 하는 상황이 자주 발생합니다.
+특히 목록 등의 데이터에서 POST, PUT, DELETE 등의 요청으로 데이터 변경이 있을 때 이런 필요성이 더욱 두드러집니다.
+이런 경우 주로 사용되는 두 가지 방법이 `refetch`와 `invalidateQueries`입니다.
 
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/59cdc5b7-d5b9-44ba-b877-6f8ba2673d92" />
-한 페이지 내에 검색바와 글 목록이 같이 보여지고, 검색바에서 검색된 내용에 따라 글 목록이 변경되어야 합니다.
-검색바로 검색할 수 있는 종류는 `글 타입(셀렉트박스)`, `키워드(텍스트 인풋)`, `내가 쓴 글만 보기(체크박스)`로
-총 세 종류입니다. 글 목록은 무한 스크롤로 구현되어야 했습니다.
+이 두 메서드는 언뜻 보기에 비슷한 기능을 수행하는 것 같지만, 실제로는 중요한 차이점들이 있습니다. 이 글에서는 두 메서드를 자세히 비교하고, 각각의 사용 사례를 살펴보겠습니다.
 
-무한 스크롤 되는 글 목록을 구현할때, 다음과 같이 `tanstack-query`의 `useInfiniteQuery`를 이용해 구현했습니다.
+## refetch
 
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/9c71074e-4d5a-47a8-973c-64f20ba92a7a" />
+`refetch`는 이름에서도 알 수 있겠지만, 특정 쿼리를 다시 실행하는 메서드입니다. 이 메서드는 쿼리의 데이터를 강제로 새로고침하며, 호출 즉시 쿼리를 재실행합니다.
 
-그런데 한가지 문제가 발생합니다. 검색바에서 검색어를 입력하고 `submit 버튼`을 누를때만 쿼리를 요청해야 하는데, 이때 위에서 작성한 것처럼 파라미터에 `글 타입(셀렉트박스)`, `키워드(텍스트 인풋)`, `내가 쓴 글만 보기(체크박스)`를 다 넣다보면
-체크박스를 클릭할때마다, 셀렉트 박스를 클릭할 때마다 쿼리가 요청되어 버린다는 것이었습니다.
+> ✏️ 주요 특징
+>
+> 1. 즉시 실행: `refetch`를 호출하면 해당 쿼리가 즉시 다시 실행됩니다.
+> 2. 쿼리 상태 유지: 쿼리의 상태(fresh/stale)를 변경하지 않습니다. 쿼리가 이미 fresh 상태라면 그대로 유지됩니다.
+> 3. 특정 쿼리 대상: 특정 쿼리 인스턴스에 대해서만 작동합니다.
+> 4. 옵저버 독립적: 활성 옵저버(active observer)의 유무와 관계없이 항상 새 데이터를 가져옵니다.
 
-## 해결방법 1. 'enabled' 옵션을 이용해보자!
+`refetch`는 즉각적인 데이터 갱신이 가능하므로 사용자의 액션에 즉시 반응해야 할 때 유용합니다.
+그러나 활성 옵저버 유무와 상관없이 항상 새 데이터를 가져오므로 불필요한 네트워크 요청을 발생시킬 수 있고, 여러 관련된 쿼리를 한 번에 갱신할 수 없습니다.
 
-그래서 이 문제를 해결하기 위해 `useInfiniteQuery`의 `enabled` 옵션을 이용해 쿼리 요청 타이밍 제어를 시도합니다. `enabled`은 쿼리를 요청할지 말지를 결정하는 옵션으로, `true`일때만 쿼리를 요청합니다.
-그러나 이 옵션은 `boolean`만 받을 수 있어서, `submit 버튼`을 눌렀을때만 쿼리를 요청하려면 `submit 버튼을 누른 상태`를 따로 관리해야 합니다.
+## invalidateQueries
 
-그런데 생각해볼까요? `submit 버튼을 누른 상태`를 어떻게 관리할 수 있을까요?
+`invalidateQueries`는 하나 이상의 쿼리를 '무효화'하는 메서드입니다. 이 메서드는 쿼리를 'stale'(오래된) 상태로 표시하고, 특정 조건에서 자동으로 리페치를 트리거합니다.
 
-아래와 같은 상태가 있다고 해보겠습니다.
+> ✏️주요 특징
+>
+> 1. 지연 실행: 쿼리를 즉시 리페치하지 않고, 다음에 해당 쿼리가 사용될 때 리페치합니다.
+> 2. 쿼리 상태 변경: 쿼리를 무조건 stale 상태로 만듭니다.
+> 3. 다중 쿼리 대상: 여러 쿼리를 한 번에 무효화할 수 있습니다.
+> 4. 옵저버 의존적: 활성 옵저버가 있는 경우에는 즉시 리페치가 트리거되고, 활성 옵저버가 없는 경우에는 다음 옵저버가 마운트될 때 리페치가 트리거 됩니다.
 
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/218c683b-a435-4a36-a165-17667f2520fd" />
+`invalidateQueries`는 여러 관련 쿼리를 효율적으로 관리할 수 있고, 불필요한 네트워크 요청을 줄일 수 있습니다. 또한 더 유연한 데이터 갱신 전략을 구현할 수 있습니다.
 
-우리는 이 제출버튼이 눌렸고 응답이 왔는지-성공이니 실패니 하는 응답과 상관없이-를 제어할 수 있는 방법이 필요합니다.
-당연하게도 검색바의 값이 `submit`되는 시점에는 isSubmit이 `true`로 변경되어야 할겁니다. 그런데 이 상태가 계속 유지되면 안되기 때문에, 쿼리가 요청되고 나서는 `false`로 변경되어야 합니다.
+## 어떤 것을 선택해야 할까?
 
-다행히도 `onSettled` 콜백을 사용하면 이를 제어할 수 있을 것 같습니다!
+그렇다면 어떤 것을 선택해야 할까요?
+만약 즉각적인 데이터 갱신이 필요한 경우라면, `refetch`를 사용하는 것이 좋습니다.
+`invalidateQueries`는 쿼리를 무효화하고 다음에 사용될 때 리페치하기 때문에, 즉각적인 갱신이 필요한 경우에는 적합하지 않습니다.
 
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/03efed32-5a88-45e5-a514-8d2391d56b9f" />
+관련된 여러 쿼리를 갱신해야 하는 경우라면 `invalidateQueries`를 사용하는 것이 좋습니다.
+`invalidateQueries`를 사용하면 관련된 여러 쿼리를 한 번에 무효화할 수 있습니다. 이 쿼리들은 다음번에 사용될 때 자동으로 리페치됩니다.
 
-그렇지만 이 방법을 사용하면 얼마 가지 않아 다시 머리가 아파질 것입니다.
-
-`onSettled` 콜백은 deprecated 되었기 때문입니다. 이에 대한 [디스커션](https://github.com/TanStack/query/discussions/5279)을 확인할 수 있습니다.
-
-그래서 이 콜백을 사용하지 않고 원하는 타이밍에 트리깅할 수 있는 다른 방법을 찾아내야했습니다.
-
-## 해결방법 2. 'refetch'를 사용해보자!
-
-tanstack-query의 공식문서를 뚫어져라 쳐다보고 있다가, `refetch`를 사용하면 되지 않을까? 하는 생각이 들었습니다.
-
-그러다가 제가 조언을 구하고 있던 지인분께서 이 방식이 공식문서에도 나와있다는 것을 알려주셨습니다.
-
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/7450ba4c-54a2-4763-bd5a-dafa72071e98" />
-
-쿼리를 자동으로 실행되지 않도록 설정하는 방법인데, `enabled`를 `false`로 설정하고, 쿼리 훅에서 반환한 `refetch`를 사용해 쿼리를 요청하는 방식입니다.
-그렇지만 이 방식에는 공식문서에도 나와있듯이, 바람직한 방법이 아닙니다. 공식문서에는 다음과 같이 나와있습니다.
-
-> Permanently disabling a query opts out of many great features that TanStack Query has to offer (like background refetches), and it's also not the idiomatic way. It takes you from the declarative approach (defining dependencies when your query should run) into an imperative mode (fetch whenever I click here). It is also not possible to pass parameters to refetch.
-
-해석하면 이 방법은
-
-- 백그라운드 리프레시와 같은 기능을 사용할 수 없습니다.
-- 선언적이라기 보다는 명령적인 방식입니다.
-- `refetch`에 매개변수를 전달할 수 없습니다.
-
-위의 문제점들 중 첫번째와 두번째를 무시하더라도, 세번째 문제점은 원하던 방식을 구현할 수 없습니다.
-검색된 값을 원하는 타이밍에 트리깅하기 위해서인데, 그러기 위해서는 매개변수를 받을 수 있어야 하기 때문입니다.
-
-그렇기 때문에 또 다른 방법을 찾아야 합니다...
-
-<img src="https://github.com/YeongseoYoon/yeongseo-blog/assets/86523545/b073758c-c6c4-491d-b358-a006292cb838" />
-
-## 해결방법 3. 'fetchQuery'로 명시적으로 호출해보자!
-
-위에서 언급한 제가 조언을 구하고 있던 지인분께서 `fetchQuery`를 사용할 수도 있을 것 같다는 키워드를 주셨습니다.
+조건부 리페치의 경우에는 `invalidateQueries`와 `enabled` 옵션을 조합하여 사용할 수 있습니다.
+[Disabling/Pausing Queries](https://tanstack.com/query/v5/docs/framework/react/guides/disabling-queries) 공식 문서에는
+'When enabled is false : The query will ignore query client invalidateQueries and refetchQueries calls that would normally result in the query refetching.'이라고 언급되어 있는데,
+이는 enabled: false 옵션을 주면 queryClient가 쿼리를 다시 가져오는 방법 중 `invalidateQueries`와 `refetchQueries`를 무시한다.는 뜻입니다.
+위를 이용하여 조건부 리페치를 구현할 수 있습니다. 반면 `refetch`의 경우에는 enabled 옵션을 무시합니다.
 
 ### ✏️ 출처
 
-https://tanstack.com/query/v4/docs/framework/react/guides/migrating-to-react-query-3#if-set-the-queryoptionsenabled-option-must-be-a-boolean-truefalse <br />
-https://github.com/TanStack/query/discussions/5279 <br />
-https://tkdodo.eu/blog/breaking-react-querys-api-on-purpose <br />
-https://tanstack.com/query/v4/docs/framework/react/guides/disabling-queries <br />
-https://github.com/TanStack/query/discussions/957#discussioncomment-4247194 <br/>
-https://youngslog.medium.com/react-query%EC%9D%98-query-key-%EA%B5%AC%EC%A1%B0%ED%99%94%ED%95%98%EA%B8%B0-b8ddc6ec0f8e <br/>
+https://tanstack.com/query/v5/docs/framework/react/guides/disabling-queries<br/>
+https://github.com/TanStack/query/discussions/2468<br/>
