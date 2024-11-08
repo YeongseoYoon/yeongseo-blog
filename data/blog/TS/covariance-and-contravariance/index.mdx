@@ -1,0 +1,134 @@
+---
+title: '공변성과 반공변성'
+date: '2024-11-06T13:33:27.982Z'
+summary: '용어 참 어렵다'
+tags: ['TypeScript']
+---
+
+`공변성(Covariance)`과 `반공변성(Contravariance)`은 컴퓨터 과학, 특히 타입 시스템에서 핵심적인 개념입니다.
+위키백과는 이 두 가지 개념에 대해 다음과 같이 설명합니다:
+
+> 프로그래밍 언어의 공변성(영어: Covariance)과 반공변성(영어: Contravariance)은 프로그래밍 언어가 타입 생성자(영어: type constructor)에 있어 서브타입을 처리하는 방법을 나타내는 것으로, 더 복잡한 타입간의 서브타입 관계가 타입 사이의 서브타입 관계에 따라 정의되거나, 이를 배반해 정의됨을 가리킨다.
+
+이 설명만 읽으면 무슨 말인지 이해하기 어렵습니다.
+이 난해한 두 개념은 타입스크립트의 타입 시스템에서도 사용되는 중요한 용어입니다.
+
+먼저 예시를 통해 개념을 이해해보겠습니다.
+
+```typescript
+interface Animal {
+  name: string;
+}
+
+interface Dog extends Animal {
+  bark(): void;
+}
+
+interface Cat extends Animal {
+  meow(): void;
+}
+```
+
+위 예시에서 `Dog`와 `Cat`은 `Animal`의 서브타입입니다.
+
+## 공변셩(Covariance)
+
+`공변성(Covariance)`은 서브타입 관계가 유지되는 경우를 말합니다. 타입스크립트에서 배열은 공변적입니다.
+
+```typescript
+let animals: Animal[] = [];
+let dogs: Dog[] = [];
+
+// Dog[]는 Animal[]의 서브타입
+animals = dogs;
+```
+
+`Dog`와 `Cat`이 `Animal`의 서브타입인 것처럼, `Dog[]`와 `Cat[]`도 `Animal[]`의 서브타입이 되는 것입니다.
+
+## 반공변성(Contravariance)
+
+`반공변성(Contravariance)`은 공변성과 반대로 서브타입 관계가 역전되는 경우를 말합니다. 함수의 매개변수 타입이 대표적인 예시입니다.
+
+```typescript
+type AnimalCallback = (animal: Animal) => void;
+type DogCallback = (dog: Dog) => void;
+
+let handleAnimal: AnimalCallback = (animal) => console.log(animal.name);
+let handleDog: DogCallback = (dog) => {
+  console.log(dog.name);
+  dog.bark();
+};
+
+// Animal을 처리할 수 있는 함수는 Dog도 처리할 수 있음
+handleDog = handleAnimal;
+
+// XX: Dog를 처리하는 함수는 모든 Animal을 처리할 수 없음
+// handleAnimal = handleDog;
+```
+
+더 넓은 타입인 `Animal`을 처리할 수 있는 함수는 더 좁은 타입인 `Dog`를 처리할 수 있습니다. 하지만 반대로 `Dog`를 처리하는 함수는 모든 `Animal`을 처리할 수 없습니다.
+`Dog`에 특화된 동작(예: bark())을 수행하는 함수는 일반적인 `Animal`에 대해서는 안전하지 않기 때문입니다.
+
+실제로 `handleDog = handleAnimal` 할당 후 `handleDog`를 호출하면, `handleAnimal`의 구현인 `console.log(animal.name)`만 실행됩니다.
+원래 `handleDog`가 가지고 있던 `bark()` 호출은 더 이상 실행되지 않습니다.
+즉, `handleDog`의 구현이 `handleAnimal`의 구현으로 완전히 대체된 것입니다.
+
+```typescript
+handleDog = handleAnimal;
+handleDog(new Dog()); // console.log(name)만 실행되고 bark()는 실행되지 않음
+```
+
+모든 `Animal`에 대해 bark()를 호출하는 것은 안전하지 않지만, `Animal`의 name을 출력하는 것은 모든 `Dog`에 대해 안전하기 때문에 타입 시스템은 `handleAnimal = handleDog`를 허용하지 않습니다.
+
+실제로 사용가능한 예시를 살펴보겠습니다.
+
+## Promise의 공변성
+
+`Promise`는 공변적입니다. 이는 서브타입 관계가 그대로 유지됨을 의미합니다.
+
+```typescript
+let dogPromise: Promise<Dog> = Promise.resolve({ name: 'Rex', bark: () => {} });
+let animalPromise: Promise<Animal> = dogPromise;
+
+// Dog가 Animal의 서브타입이므로
+// Promise<Dog>는 Promise<Animal>의 서브타입
+```
+
+## 이벤트 핸들러의 반공변성
+
+`이벤트 핸들러`는 반공변적입니다.
+더 넓은 타입의 이벤트를 처리할 수 있는 핸들러는 더 좁은 타입의 이벤트도 처리할 수 있습니다.
+
+```typescript
+interface MouseEvent {
+  type: string;
+  x: number;
+  y: number;
+}
+
+interface ClickEvent extends MouseEvent {
+  button: number;
+}
+
+type MouseEventHandler = (event: MouseEvent) => void;
+type ClickEventHandler = (event: ClickEvent) => void;
+
+let handleMouseEvent: MouseEventHandler = (e) => console.log(e.x, e.y);
+let handleClickEvent: ClickEventHandler = handleMouseEvent;
+
+// MouseEvent를 처리할 수 있는 핸들러는
+// ClickEvent도 처리할 수 있음 (반공변성)
+```
+
+위에서 설명했듯 함수의 매개변수는 반공변적이므로, 더 넓은 타입인 `MouseEvent`를 처리하는 핸들러를 더 좁은 타입인 `ClickEvent`를 처리하는 핸들러에 할당할 수 있습니다.
+`MouseEvent`의 속성(type, x, y)만 사용하는 핸들러는 당연히 이러한 속성들을 모두 가지고 있는 `ClickEvent`도 안전하게 처리할 수 있기 때문입니다.
+
+용어만 읽으면 어렵게 느껴지는 공변성과 반공변성은 사실 우리가 직관적으로 기대하는 타입 관계를 형식화한 것입니다.
+배열의 경우 `Dog`가 `Animal`의 하위 타입이면 `Dog[]`도 `Animal[]`의 하위 타입이 되는 것이 자연스럽습니다.
+반대로 함수의 매개변수는 더 넓은 타입을 처리할 수 있는 함수가 더 좁은 타입도 처리할 수 있는 것이 당연합니다.
+
+이러한 타입 관계는 코드의 안전성을 보장하는 중요한 규칙이며, 실제로 우리가 작성하는 많은 코드에서 자연스럽게 적용되고 있습니다.
+
+### ✏️ 출처
+
+https://ko.wikipedia.org/wiki/%EA%B3%B5%EB%B3%80%EC%84%B1%EA%B3%BC_%EB%B0%98%EA%B3%B5%EB%B3%80%EC%84%B1_(%EC%BB%B4%ED%93%A8%ED%84%B0_%EA%B3%BC%ED%95%99)<br/>
