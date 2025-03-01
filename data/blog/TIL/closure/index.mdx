@@ -1,0 +1,211 @@
+---
+title: '클로저란?'
+date: '2025-03-01T13:33:27.982Z'
+summary: '한 걸음 closure 내 맘'
+tags: ['JavaScript']
+---
+
+얼마 전 항해플러스 과제를 진행하면서, 이미 호출한 API는 다시 호출하지 않도록 시도하라는 요구사항이 있었고 그에 대한 힌트로 클로저를 이용해 캐싱을 구현하라고 적혀있었습니다. 
+클로저 개념에 대해 어렴풋이만 알고 있었기 때문에 이를 구현하는 과정에서 어려움을 겪었습니다.
+
+오늘은 이 경험을 바탕으로 클로저의 개념과 활용 방법에 대해 더 깊이 알아보고자 합니다.
+
+
+# 클로저(Closure)란?
+
+[MDX](https://developer.mozilla.org/ko/docs/Web/JavaScript/Closures)에서는 클로저를 `'주변 상태(어휘적 환경)에 대한 참조와 함께 묶인(포함된) 함수의 조합'`이라고 정의합니다.
+솔직히 이 문장만 보면 대체 어떤 개념인지 이해되질 않습니다. 여기엔 사전 개념에 대한 이해가 필요하기 때문입니다.
+
+
+## 어휘적 환경(Lexical Environment)
+`어휘적 환경(Lexical Environment)`이라는 단어부터도 어렵습니다. 우리가 흔히 말하는 '어휘'란 단어의 집합을 의미하지만, 자바스크립트에서 말하는 어휘적 환경은 코드가 작성된 위치에 따른 변수와 함수의 접근 범위를 정의하는 구조를 의미합니다. 
+쉽게 말해, 코드가 어디에 위치하는지에 따라 해당 코드에서 접근할 수 있는 변수와 함수가 결정된다는 것입니다.
+
+클로저를 이해하기 위해서는 이 어휘적 환경의 개념을 먼저 이해해야 합니다. 함수가 선언될 때, 그 함수는 자신이 선언된 환경(주변 코드)의 변수에 접근할 수 있는 권한을 가지게 됩니다. 이것이 바로 `어휘적 스코프(Lexical Scope)`의 핵심입니다.
+클로저는 이 어휘적 환경을 활용하여, 함수가 자신이 생성됐을 때의 환경을 '기억'하고 있다가, 나중에 다른 스코프에서 실행될 때도 그 환경에 있는 변수에 접근할 수 있게 해주는 메커니즘입니다.
+
+조금 더 깊게 들어가볼까요? 어휘적 환경에 대해서 이해하려면 `실행 컨텍스트(Execution Context)`에 대한 이해 또한 필요합니다.
+
+## 실행 컨텍스트(Execution Context)
+`실행 컨텍스트(Execution Context)`는 실행할 코드에 제공할 환경 정보들을 모아놓은 객체라고 할 수 있습니다.
+
+함수 실행 컨텍스트의 내부 생김새는 다음과 같이 구성됩니다.
+
+<figure>
+<img src="/static/images/함수-실행-컨텍스트.png" alt="함수 실행 컨텍스트" />
+<figcaption>함수 실행 컨텍스트</figcaption>
+</figure>
+
+위 실행 컨텍스트의 내부에는 이전에 언급한 `Lexical Environment`가 포함되어 있습니다. 
+
+이는 두 가지 주요 구성 요소를 가집니다.
+
+1. 환경 레코드(Environment Record): 변수와 함수 선언을 저장하는 공간
+2. 외부 환경 참조(Outer Environment Reference): 상위 스코프의 Lexical Environment를 가리키는 참조
+
+이 '외부 환경 참조'가 바로 클로저의 핵심입니다. 
+함수가 생성될 때, 함수는 자신이 생성된 환경의 Lexical Environment에 대한 참조를 `[[Environment]]`라는 내부 속성에 저장합니다. 이 참조는 함수가 호출될 때마다 새로 생성되는 함수 실행 컨텍스트의 외부 환경 참조로 사용됩니다.
+
+예를 들어서 이해해 보겠습니다.
+
+```js
+function createCounter() {
+  let count = 0;  // Environment Record에 저장
+  
+  return function increment() {
+    count++;  // 외부 함수의 변수에 접근
+    return count;
+  };
+}
+
+const counter = createCounter(); // 콜 스택에서 제거
+console.log(counter()); // 1
+console.log(counter()); // 2
+```
+위 코드에서 일어나는 일을 단계적으로 살펴보겠습니다.
+
+1. createCounter 함수가 호출되면 함수 실행 컨텍스트가 생성되고, 여기에 count 변수가 Environment Record에 저장됩니다.
+2. increment 함수가 생성될 때, 이 함수는 자신이 생성된 환경(createCounter의 Lexical Environment)에 대한 참조를 저장합니다.
+3. createCounter 함수의 실행이 끝나면 해당 함수의 실행 컨텍스트는 콜 스택에서 제거됩니다.
+4. 그러나 increment 함수의 `[[Environment]]` 속성은 여전히 createCounter의 `Lexical Environment`를 참조하고 있습니다.
+5. counter(즉, increment 함수)를 호출할 때마다 increment의 실행 컨텍스트가 생성되고, `Outer Environment Reference`는 `[[Environment]]`에 저장된 값을 사용합니다.
+6. 따라서 increment 함수는 createCounter의 count 변수에 계속 접근할 수 있게 됩니다.
+
+
+## 가비지 컬렉션(Garbage Collection)과 클로저
+
+자바스크립트는 가비지 컬렉션(Garbage Collection)을 통해 더 이상 참조되지 않는 메모리를 자동으로 해제합니다. 
+그렇다면 createCounter 함수가 실행을 마치면 그 안의 변수들도 수거되어야 하는데, 클로저의 경우 그렇지 않습니다. 왜 그럴까요?
+
+```js
+function createCounter() {
+  let count = 0;
+  
+  return function increment() {
+    count++;
+    return count;
+  };
+}
+
+const counter = createCounter();
+```
+
+1. createCounter 함수가 실행되면 count 변수를 포함한 렉시컬 환경이 생성됩니다.
+2. increment 함수가 생성될 때 `[[Environment]]` 속성에 createCounter의 렉시컬 환경을 참조로 저장합니다.
+3. createCounter 함수의 실행이 끝나면 일반적으로는 그 렉시컬 환경이 가비지 컬렉션의 대상이 됩니다.
+4. 하지만 increment 함수의 `[[Environment]]`가 여전히 이 렉시컬 환경을 참조하고 있기 때문에, 자바스크립트 엔진은 이를 "여전히 사용 중"으로 간주합니다.
+5. counter 변수가 increment 함수를 참조하는 한, increment 함수의 `[[Environment]]`가 참조하는 createCounter의 렉시컬 환경(count 변수 포함)도 메모리에 계속 유지됩니다.
+
+이것이 클로저에서 중요한 특성입니다. 함수가 자신이 생성된 환경을 계속 참조하기 때문에, 원래라면 수명이 다했을 변수들이 여전히 살아있게 됩니다.
+
+이러한 이유로 클로저가 때로는 메모리 누수의 원인이 될 수 있습니다.
+클로저가 더 이상 필요하지 않다면, 관련 참조를 null로 설정하여 가비지 컬렉션이 일어날 수 있게 해야 합니다.
+
+# 클로저는 왜 필요할까요?
+
+클로저는 다양한 상황에서 유용하게 활용할 수 있습니다.
+
+## 1. 데이터 은닉과 캡슐화
+
+클로저를 사용하면 외부에서 직접 접근할 수 없는 비공개 변수를 만들 수 있습니다. 자바스크립트는 전통적으로 private/public 같은 접근 제한자를 지원하지 않았지만, 클로저를 통해 이를 구현할 수 있습니다.
+
+```js
+function createBankAccount(initialBalance) {
+  let balance = initialBalance; // 외부에서 직접 접근 불가능한 변수
+  
+  return {
+    deposit: function(amount) {
+      balance += amount;
+      return balance;
+    },
+    withdraw: function(amount) {
+      if (amount > balance) {
+        return '잔액이 부족합니다';
+      }
+      balance -= amount;
+      return balance;
+    },
+    getBalance: function() {
+      return balance;
+    }
+  };
+}
+
+const account = createBankAccount(100);
+account.deposit(50); // 150
+account.withdraw(30); // 120
+console.log(account.getBalance()); // 120
+console.log(account.balance); // undefined - 직접 접근 불가
+```
+
+## 2. 메모이제이션
+클로저를 사용하면 함수가 이전 호출의 결과나 상태를 "기억"할 수 있습니다. 이는 항해플러스 과제에서 요구했던 API 캐싱 구현과 같은 메모이제이션 패턴에 적합합니다.
+
+```js
+function createApiCaller() {
+  const cache = new WeakMap();
+  
+  return function callApi(requestKey, url) {
+    if (!requestKey || typeof requestKey !== 'object') {
+      throw new Error('requestKey must be an object');
+    }
+    
+    // callApi 함수는 외부 함수인 createApiCaller의 변수인 cache에 접근합니다
+    if (cache.has(requestKey)) {
+      console.log('캐시된 결과 사용:', url);
+      // 여기서 cache 변수를 사용
+      return Promise.resolve(cache.get(requestKey));
+    }
+    
+    console.log('API 호출:', url);
+    return fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        cache.set(requestKey, data);
+        return data;
+      });
+  };
+}
+
+const apiCaller = createApiCaller();
+
+const userDataRequest = { type: 'userData', id: 123 };
+
+apiCaller(userDataRequest, 'https://api.example.com/users/123')
+  .then(data => {
+    console.log('첫 번째 호출 결과:', data);
+    
+    return apiCaller(userDataRequest, 'https://api.example.com/users/123');
+  })
+  .then(data => {
+    console.log('두 번째 호출 결과:', data);
+  });
+```
+callApi 함수는 자신이 생성된 환경(createApiCaller의 렉시컬 환경)에 있는 cache 변수에 접근합니다.
+createApiCaller 함수의 실행이 완료된 후에도 반환된 callApi 함수는 여전히 cache 변수에 접근할 수 있습니다.
+이를 통해 cache 변수는 외부에서 직접 접근할 수 없지만, callApi 함수를 통해서만 간접적으로 조작할 수 있습니다.
+
+## 3.이벤트 핸들러와 콜백
+클로저는 이벤트 핸들러나 콜백 함수에서 특히 유용합니다. 함수가 생성될 때의 환경을 유지할 수 있어 외부 변수를 사용할 수 있습니다.
+
+```js
+function setupButtonListeners() {
+  const buttons = document.querySelectorAll('button');
+  
+  for (let i = 0; i < buttons.length; i++) {
+    buttons[i].addEventListener('click', function() {
+      console.log(`버튼 ${i+1}이 클릭되었습니다`);
+    });
+  }
+}
+```
+
+이번 글에서는 클로저의 개념부터 실행 컨텍스트, 가비지 컬렉션과 클로저의 관계, 클로저의 활용 방법까지 알아보았습니다. 
+
+다음 글에서는 리액트에서 클로저가 어떻게 활용되는지 알아보겠습니다. 
+리액트의 함수형 컴포넌트와 훅 시스템은 클로저의 개념을 핵심적으로 활용하고 있는데요, useState와 useEffect 같은 훅들이 어떻게 클로저를 통해 상태를 관리하는지, 
+그리고 개발 중에 흔히 마주치는 클로저 관련 이슈들과 해결 방법에 대해 자세히 살펴보겠습니다.
+
+
+### ✏️ 출처
+https://developer.mozilla.org/ko/docs/Web/JavaScript/Closures <br/>
