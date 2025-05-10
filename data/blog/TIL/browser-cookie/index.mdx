@@ -1,0 +1,125 @@
+---
+title: '브라우저 쿠키의 SameSite 속성에 대하여'
+date: '2025-05-10T13:33:27.982Z'
+summary: '내가 만든 쿠키'
+tags: ['JavaScript']
+---
+
+저희 회사 서비스에는 A.skillflo.io와 B.skillflo.io 같은 다른 도메인을 가진 사이트가 있습니다. 
+이 두 서비스 사이의 로그인 정보 공유 작업 중 흥미로운 문제에 부딪혔습니다. A 사이트에서 로그인 로직을 리팩토링한 후, B 사이트에서 테스트를 진행하던 중 로그인이 되지 않는 현상이 발생했죠. 
+개발자 도구를 통해 쿠키를 직접 조작해 보았지만 여전히 문제가 해결되지 않았습니다.
+
+원인을 찾아보니 SameSite 속성이 문제였습니다. 로그인 정보를 공유하기 위해서는 `SameSite=None`으로 설정되어 있어야 했지만, 이 설정이 제대로 적용되지 않아 크로스 도메인 로그인이 차단되고 있었던 것입니다. 
+
+이 경험을 바탕으로 쿠키의 SameSite 속성과 크로스 도메인 인증에 대한 지식을 공유하고자 합니다.
+
+## 왜 로컬 스토리지로는 충분하지 않았을까? 
+
+인증 정보를 관리할 때, 많은 개발자들이 첫 번째로 `localStorage`나 `sessionStorage`를 고려합니다. 
+
+하지만 이들은 **동일 출처 정책(Same-Origin Policy)**에 엄격하게 제한됩니다. A.example.com에서 설정한 `localStorage` 값은 B.example.com에서 직접 접근할 수 없습니다.
+
+반면 쿠키는 도메인 속성을 통해 서브도메인 간 공유가 가능합니다. `.skillflo.io`와 같이 도메인 앞에 점을 붙이면 모든 서브도메인(A.skillflo.io, B.skillflo.io 등)에서 해당 쿠키에 접근할 수 있게 됩니다.
+
+```javascript
+// 모든 서브도메인에서 접근 가능한 쿠키 설정
+document.cookie = "auth_token=abc123; domain=.skillflo.io; path=/; Secure;";
+```
+
+이것이 우리가 서브도메인 간 인증 정보 공유를 위해 쿠키를 선택한 주요 이유입니다.
+
+## SameSite 속성이란?
+
+SameSite는 2016년에 소개되고 2020년 Chrome 80부터 기본값이 변경되면서 웹 개발 환경에 큰 변화를 가져온 쿠키 속성입니다. 
+이 속성은 **크로스 사이트 요청 위조(CSRF)** 공격을 방지하기 위해 설계되었으며, 쿠키가 어떤 상황에서 전송될지를 결정합니다.
+
+SameSite 속성에는 세 가지 가능한 값이 있습니다.
+
+### 1. Strict
+
+가장 엄격한 설정입니다. 쿠키는 오직 쿠키를 설정한 사이트에서 시작된 요청에만 전송됩니다.
+
+```javascript
+document.cookie = "session=abc123; SameSite=Strict; Secure;";
+```
+
+
+### 2. Lax (현재 대부분 브라우저의 기본값)
+
+Strict보다 약간 완화된 설정입니다. 최상위 레벨 내비게이션(링크 클릭 등)과 안전한 HTTP 메서드(GET)에는 쿠키가 전송됩니다.
+
+```javascript
+document.cookie = "session=abc123; SameSite=Lax; Secure;";
+```
+
+
+### 3. None
+
+교차 사이트 요청에도 쿠키가 항상 전송됩니다. 이 옵션을 사용할 때는 반드시 Secure 속성(HTTPS 필수)과 함께 설정해야 합니다.
+
+```javascript
+document.cookie = "session=abc123; SameSite=None; Secure;";
+```
+
+
+## SameSite=None이 필요했던 이유
+
+skillflo.io의 서브도메인 간 쿠키 공유에는 SameSite=None 설정이 필수적이었습니다. A.skillflo.io에서 설정한 인증 쿠키를 B.skillflo.io에서 사용하려면, 브라우저가 이를 크로스 사이트 요청으로 간주하기 때문입니다.
+
+문제 해결을 위해 우리가 적용한 쿠키 설정 코드는 다음과 같습니다.
+
+```typescript
+const cookieString = `${name}=${value}; domain=${domain}; samesite=None; path=/; Secure; expires=${expiresDate.toUTCString()};`;
+```
+
+여기서 핵심은 세 가지 설정입니다.
+
+1. `domain=${domain}`: 도메인을 명시적으로 설정하여 서브도메인 간 공유가 가능하도록 합니다.
+2. `samesite=None`: 크로스 사이트 요청에도 쿠키가 전송되도록 합니다.
+3. `Secure`: HTTPS 연결에서만 쿠키가 전송되도록 합니다. SameSite=None과 함께 사용해야 합니다.
+
+## 쿠키 설정 디버깅 방법
+
+SameSite 관련 문제를 디버깅할 때 다음 사항을 확인하면 좀 더 쉽게 문제를 해결할 수 있습니다.
+
+1. **개발자 도구에서 쿠키 확인**: Chrome 개발자 도구의 Application 탭 → Storage → Cookies에서 쿠키 속성을 확인합니다.
+
+<figure>
+<img src="/static/images/cookie-browser.png" alt="cookie-browser" />
+<figcaption>개발자 도구의 쿠키 탭</figcaption>
+</figure>
+
+2. **SameSite 값이 제대로 표시되는지 확인**: SameSite=None이 설정되었는지 확인합니다.
+
+3. **HTTPS 연결 확인**: SameSite=None은 반드시 Secure 속성과 함께 사용해야 하며, 이는 HTTPS 연결을 필요로 합니다.
+
+4. **헤더 분석**: 네트워크 탭에서 Set-Cookie 헤더가 제대로 설정되었는지 확인합니다.
+
+## SameSite=None 사용 시 고려할 점
+
+SameSite=None을 사용하면 편리하지만, 몇 가지 주의사항이 있습니다.
+
+1. **CSRF 취약성 증가**: 크로스 사이트 요청에도 쿠키가 전송되어 추가적인 CSRF 방어 메커니즘이 필요할 수 있습니다.
+
+2. **일부 브라우저 호환성 문제**: 특히 오래된 브라우저는 SameSite=None을 제대로 지원하지 않을 수 있습니다.
+
+3. **iOS 12 Safari, 일부 복잡한 웹뷰 환경에서 문제 발생 가능**: 이러한 환경에서는 SameSite=None을 무시하고 Strict처럼 처리할 수 있습니다.
+
+4. **Secure 속성 필수**: HTTP 환경에서는 SameSite=None과 함께 쿠키를 설정할 수 없습니다.
+
+
+
+다중 도메인 환경에서 원활한 사용자 경험을 위한 인증 시스템을 설계할 때는 쿠키의 SameSite 속성을 제대로 이해하고 설정하는 것이 중요합니다. 저희 팀의 경우에는 SameSite=None, Secure 옵션과 적절한 도메인 설정을 통해 서브도메인 간 인증 정보 공유 문제를 해결할 수 있었습니다.
+
+물론 이 방식은 CSRF 공격에 대한 추가적인 방어 메커니즘이 필요하며, 모든 통신이 HTTPS를 통해 이루어져야 한다는 제약이 있습니다. 
+
+저희 팀처럼 브라우저 쿠키를 통해 다중 도메인 인증을 구현할 수도 있지만 이것이 무조건적인 정답은 아니고 각 서비스의 요구사항과 위험 프로필에 맞는 최적의 설정을 찾는 것이 중요합니다.
+
+
+### ✏️ 출처
+
+- [MDN Web Docs: SameSite 쿠키](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie/SameSite)
+- [웹 보안 아카데미: SameSite 쿠키 설명](https://web.dev/samesite-cookies-explained/)
+- [Chrome 개발자 블로그: SameSite 업데이트](https://blog.chromium.org/2020/02/samesite-cookie-changes-in-february.html)
+
+
