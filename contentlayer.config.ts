@@ -45,7 +45,7 @@ const computedFields: ComputedFields = {
  * Count the occurrences of all tags across blog posts and write to json file
  */
 function createTagCount(allBlogs) {
-  const tagCount: Record = {};
+  const tagCount: Record<string, number> = {};
   const slugger = new GithubSlugger();
   allBlogs.forEach((file) => {
     if (file.tags && file.draft !== true) {
