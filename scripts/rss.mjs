@@ -43,14 +43,17 @@ async function generateRSS(config, allBlogs, page = 'feed.xml') {
   }
 
   if (publishPosts.length > 0) {
+    const slugger = new GithubSlugger();
     for (const tag of Object.keys(tagData)) {
       const filteredPosts = allBlogs.filter((post) =>
-        post.tags.map((t) => GithubSlugger.slug(t)).includes(tag)
+        post.tags.map((t) => slugger.slug(t)).includes(tag)
       );
-      const rss = generateRss(config, filteredPosts, `tags/${tag}/${page}`);
-      const rssPath = path.join('public', 'tags', tag);
-      mkdirSync(rssPath, { recursive: true });
-      writeFileSync(path.join(rssPath, page), rss);
+      if (filteredPosts.length > 0) {
+        const rss = generateRss(config, filteredPosts, `tags/${tag}/${page}`);
+        const rssPath = path.join('public', 'tags', tag);
+        mkdirSync(rssPath, { recursive: true });
+        writeFileSync(path.join(rssPath, page), rss);
+      }
     }
   }
 }
