@@ -1,0 +1,1092 @@
+---
+title: 'requestAnimationFrame의 콜백은 어디에서 기다리고 있을까?'
+date: '2026-08-29T00:00:00.000Z'
+summary: 'Task Queue와 Microtask Queue 바깥에서 requestAnimationFrame 콜백이 저장되고 실행되는 과정을 살펴봅니다.'
+tags: ['JavaScript', 'browser']
+---
+
+애니메이션을 구현할 때 자연스럽게 `requestAnimationFrame`을 사용한다.
+
+```ts
+const animate = () => {
+  update();
+
+  requestAnimationFrame(animate);
+};
+
+requestAnimationFrame(animate);
+```
+
+처음 배울 때는 보통 이렇게 설명한다.
+
+> `requestAnimationFrame`은 브라우저의 화면 주기에 맞춰 콜백을 실행하기 때문에 `setTimeout`보다 애니메이션에 적합하다.
+
+사용법만 익히기에는 충분한 설명이다. 그런데 Event Loop를 공부하다 보니 궁금한 점이 생겼다.
+
+```ts
+setTimeout(() => {
+  console.log('timeout');
+}, 0);
+
+queueMicrotask(() => {
+  console.log('microtask');
+});
+
+requestAnimationFrame(() => {
+  console.log('raf');
+});
+```
+
+`setTimeout`의 콜백은 Task로 실행되고 `queueMicrotask`의 콜백은 Microtask Queue에 들어간다.
+
+그럼 `requestAnimationFrame`의 콜백은 어디에 들어갈까?
+
+처음에는 자연스럽게 세 번째 Queue가 따로 있을 거라고 생각했다.
+
+```text
+Task Queue
+Microtask Queue
+Animation Frame Queue?
+```
+
+HTML Standard를 따라가 보니 실제 구조는 조금 달랐다.
+
+`requestAnimationFrame`의 콜백은 일반적인 Task Queue나 Microtask Queue에 들어가지 않는다. 브라우저는 animation frame callback을 따로 관리하고, 화면을 갱신할 시점이 오면 렌더링 과정 안에서 이 콜백들을 실행한다.
+
+따라서 rAF를 제대로 이해하려면 Event Loop뿐만 아니라 **브라우저가 언제 렌더링하고, 그 과정에서 rAF가 어디에 끼어드는지**까지 함께 봐야 한다.
+
+> 이 글에서는 일반적인 프론트엔드 코드에서 사용하는 `window.requestAnimationFrame()`을 기준으로 설명한다. 현재 표준에서는 Dedicated Worker에서도 rAF를 사용할 수 있지만, Window에서 호출하는 경우 animation frame callback 상태를 관리하는 target은 해당 Window와 연결된 `Document`다.
+
+---
+
+## Macro Task라는 이름부터 조금 애매하다
+
+Event Loop를 설명할 때 보통 두 가지 용어를 많이 사용한다.
+
+- Macro Task
+- Microtask
+
+그런데 HTML Standard에는 `Macro Task`라는 공식 용어가 없다. 스펙에서 사용하는 이름은 그냥 **Task**다.
+
+`setTimeout`, 사용자 입력, 네트워크 이벤트처럼 브라우저가 처리해야 하는 작업은 Task가 되고, 각각은 **task source**와 연결된다.
+
+예를 들어 Timer와 관련된 Task에는 `timer task source`가 있다. 현재 HTML Standard에는 렌더링 업데이트를 위한 `rendering task source`도 정의되어 있다.
+
+반면 Promise reaction이나 `queueMicrotask`처럼 현재 JavaScript 실행 직후 처리해야 하는 작업은 Microtask Queue에서 처리된다.
+
+대략 다음과 같이 볼 수 있다.
+
+```text
+Task
+ ├─ timer task source
+ ├─ DOM manipulation task source
+ ├─ rendering task source
+ └─ ...
+
+Microtask Queue
+ ├─ Promise reaction
+ └─ queueMicrotask
+```
+
+여기서 rAF callback 자체가 Task 하나로 등록되는 것은 아니다.
+
+브라우저가 렌더링을 처리하는 Task를 실행할 때, 그 안에서 animation frame callback을 꺼내 호출한다.
+
+이 차이를 이해하려면 `requestAnimationFrame()`을 호출했을 때 어떤 상태가 바뀌는지부터 살펴보는 게 좋다.
+
+---
+
+## requestAnimationFrame을 호출하면 콜백은 어디에 저장될까?
+
+다음 코드를 실행했다고 해보자.
+
+```ts
+const id = requestAnimationFrame((timestamp) => {
+  console.log(timestamp);
+});
+```
+
+HTML Standard에서 `requestAnimationFrame()`의 동작을 단순화하면 다음과 같다.
+
+```text
+1. target을 찾는다.
+2. animation frame callback identifier를 1 증가시킨다.
+3. 증가시킨 값을 handle로 사용한다.
+4. target의 animation frame callbacks를 가져온다.
+5. callbacks[handle] = callback으로 저장한다.
+6. handle을 반환한다.
+```
+
+`window.requestAnimationFrame()`을 기준으로 보면 여기서 target은 Window와 연결된 `Document`다.
+
+개념적으로는 이런 상태를 생각할 수 있다.
+
+```text
+Window
+  │
+  └─ associated Document
+          │
+          ├─ animation frame callback identifier
+          │       3
+          │
+          └─ map of animation frame callbacks
+                  1 → callbackA
+                  2 → callbackB
+                  3 → callbackC
+```
+
+흥미로운 점은 HTML Standard가 `map of animation frame callbacks`를 **ordered map**으로 정의한다는 것이다.
+
+흔히 rAF callback이 들어가는 곳을 편의상 `rAF Queue`라고 부르기도 하지만, 일반적인 Task Queue와 같은 종류의 Queue가 하나 더 있다고 생각하면 정확하지 않다.
+
+스펙에서는 callback을 `handle → callback` 형태로 관리하는 ordered map을 사용한다.
+
+다만 여기서 말하는 `ordered map`은 **스펙이 동작을 설명하기 위해 사용하는 추상적인 자료구조**다.
+
+Chrome의 Blink, Firefox의 Gecko, Safari의 WebKit이 내부적으로 반드시 똑같은 자료구조를 사용해야 한다는 뜻은 아니다. 실제 구현에서 Vector를 사용하는지 HashMap과 별도의 순서 정보를 조합하는지는 브라우저 엔진의 구현 세부사항이다.
+
+웹 개발자가 보장받는 것은 내부 자료구조가 아니라 등록 순서나 취소처럼 외부에서 관찰할 수 있는 동작이다.
+
+---
+
+## requestAnimationFrame은 왜 숫자를 반환할까?
+
+ordered map 구조를 알고 나면 `requestAnimationFrame()`이 숫자를 반환하는 이유도 자연스럽게 연결된다.
+
+```ts
+const frameId = requestAnimationFrame(() => {
+  console.log('frame');
+});
+
+cancelAnimationFrame(frameId);
+```
+
+`requestAnimationFrame()`은 animation frame callback identifier를 증가시키고, 그 값을 key로 callback을 저장한다.
+
+개념적으로 다음과 같다.
+
+```text
+callbacks
+
+1 → callbackA
+2 → callbackB
+3 → callbackC
+```
+
+`requestAnimationFrame(callbackC)`이 `3`을 반환했다면,
+
+```ts
+cancelAnimationFrame(3);
+```
+
+을 호출해서 해당 callback을 취소할 수 있다.
+
+스펙에 정의된 `cancelAnimationFrame()`의 동작도 단순하다.
+
+```text
+callbacks에서 callbacks[handle]을 제거한다.
+```
+
+반환되는 숫자는 단순한 부가 정보가 아니라 등록된 callback을 식별하는 handle이다.
+
+---
+
+## 등록된 callback은 언제 실행될까?
+
+콜백이 어디에 저장되는지까지는 알았다.
+
+이제 남는 질문은 하나다.
+
+```ts
+requestAnimationFrame(() => {
+  console.log('when?');
+});
+```
+
+이 콜백을 브라우저는 언제 꺼낼까?
+
+rAF를 설명할 때 흔히 다음 표현을 사용한다.
+
+> 다음 repaint 직전에 실행된다.
+
+큰 흐름을 설명하기에는 괜찮지만 실제 렌더링 과정을 이해하기에는 생략된 부분이 많다.
+
+조금 더 정확하게 말하면 rAF callback은 브라우저의 **`update the rendering` 과정에서 실행된다.**
+
+---
+
+## Event Loop는 Task가 끝날 때마다 화면을 그리지 않는다
+
+Event Loop를 처음 배우면 흔히 이런 그림을 접한다.
+
+```text
+Task
+ ↓
+Microtask
+ ↓
+Task
+ ↓
+Microtask
+ ↓
+...
+```
+
+여기에 렌더링을 붙이면 다음처럼 그리는 경우도 많다.
+
+```text
+Task
+ ↓
+Microtask
+ ↓
+Rendering
+ ↓
+Task
+```
+
+이 그림만 보면 Task가 하나 끝날 때마다 브라우저가 화면을 그리는 것처럼 보인다.
+
+실제로는 그렇지 않다.
+
+브라우저가 화면을 업데이트할 수 있는 시점을 HTML Standard에서는 **rendering opportunity**라고 표현한다.
+
+60Hz 디스플레이 환경이라면 약 `16.67ms` 간격을 떠올릴 수 있지만 스펙이 브라우저에게 정확히 16.67ms마다 렌더링하라고 요구하지는 않는다.
+
+메인 스레드가 바쁘거나 페이지가 보이지 않는다면 실제 렌더링 빈도는 달라질 수 있다.
+
+따라서 다음 흐름을 고정된 반복문처럼 외우는 것은 좋지 않다.
+
+```text
+Task → Microtask → Rendering
+```
+
+렌더링할 기회가 있고 실제 업데이트가 필요할 때 브라우저가 렌더링 과정을 시작한다고 이해하는 편이 낫다.
+
+---
+
+## 현재 HTML Standard에서는 렌더링도 Task를 통해 시작된다
+
+여기서 한 단계 더 들어가 보면 재미있는 부분이 나온다.
+
+오래된 Event Loop 설명에서는 Rendering을 Task와 완전히 별개의 단계처럼 그리는 경우가 많다.
+
+현재 HTML Living Standard에서는 rendering opportunity가 발생하면 `rendering task source`를 통해 `update the rendering`을 수행할 Task를 등록하도록 정의하고 있다.
+
+대략적인 흐름은 다음과 같다.
+
+```text
+Rendering Opportunity
+           │
+           ▼
+rendering task source
+           │
+           ▼
+Update the Rendering Task
+           │
+           ├─ resize 처리
+           ├─ scroll 처리
+           ├─ animation 업데이트
+           ├─ ...
+           ├─ rAF callbacks 실행
+           ├─ style 계산
+           ├─ layout
+           └─ ...
+```
+
+그래서
+
+> rAF는 Task인가?
+
+라는 질문에는 조금 나눠서 답할 필요가 있다.
+
+**rAF callback 자체가 하나의 Task로 Task Queue에 등록되는 것은 아니다.**
+
+대신 브라우저가 rendering opportunity에 맞춰 `update the rendering` Task를 실행하고, 그 알고리즘 안에서 rAF callback들이 호출된다.
+
+---
+
+## rAF는 렌더링 과정의 어디쯤에서 실행될까?
+
+`update the rendering` 알고리즘에는 rAF보다 먼저 수행되는 작업도 있다.
+
+전체 과정을 단순화하면 다음과 같다.
+
+```text
+Rendering Opportunity
+        │
+        ▼
+Update the Rendering
+        │
+        ├─ resize steps
+        ├─ scroll steps
+        ├─ media query 변경 평가
+        ├─ Web Animation 업데이트
+        ├─ fullscreen 관련 처리
+        │
+        ▼
+Run animation frame callbacks
+        │
+        ▼
+Recalculate styles
+        │
+        ▼
+Update layout
+        │
+        ▼
+나머지 rendering 과정
+```
+
+따라서 `rAF는 paint 바로 직전에 실행된다`고 외우기보다는 **한 번의 rendering update 안에서 style과 layout을 갱신하기 전 rAF callback을 실행한다**고 이해하는 편이 낫다.
+
+이 흐름 덕분에 rAF callback에서 DOM이나 style을 변경하면 그 내용을 뒤이어 진행되는 렌더링 계산에 반영할 수 있다.
+
+```ts
+requestAnimationFrame(() => {
+  element.style.transform = 'translateX(100px)';
+});
+```
+
+개념적으로는 다음과 같다.
+
+```text
+rAF
+ ↓
+DOM / Style 변경
+ ↓
+Style Recalculation
+ ↓
+Layout
+ ↓
+Paint
+```
+
+물론 이 그림 역시 이해를 위한 단순화다.
+
+브라우저가 매 프레임마다 `Style → Layout → Paint`를 모두 수행하는 것은 아니다. 어떤 속성이 바뀌었는지, 기존 레이아웃을 다시 계산할 필요가 있는지에 따라 일부 과정은 생략될 수 있다.
+
+---
+
+## rAF 안에서 다시 rAF를 호출하면 왜 다음 프레임에서 실행될까?
+
+이제 callback을 실행하는 알고리즘을 살펴보자.
+
+다음과 같이 세 개의 callback을 등록했다.
+
+```ts
+requestAnimationFrame(() => {
+  console.log('A');
+});
+
+requestAnimationFrame(() => {
+  console.log('B');
+});
+
+requestAnimationFrame(() => {
+  console.log('C');
+});
+```
+
+callback map은 개념적으로 다음 상태가 된다.
+
+```text
+1 → A
+2 → B
+3 → C
+```
+
+HTML Standard의 animation frame callback 실행 절차를 단순화하면 이렇다.
+
+```text
+1. callbacks Map을 가져온다.
+2. callbacks의 key 목록을 가져온다.
+3. key 목록을 순회한다.
+4. 해당 handle이 callbacks에 아직 존재하는지 확인한다.
+5. callback을 callbacks에서 제거한다.
+6. callback을 실행한다.
+```
+
+여기서 눈에 띄는 부분이 있다.
+
+브라우저는 Map을 순회하면서 새로 생긴 callback까지 계속 실행하지 않는다. **이번에 실행할 callback의 handle 목록을 먼저 얻는다.**
+
+이 구조 때문에 다음 코드의 동작을 설명할 수 있다.
+
+```ts
+requestAnimationFrame(() => {
+  console.log('A');
+
+  requestAnimationFrame(() => {
+    console.log('B');
+  });
+});
+```
+
+처음에는 callback 하나만 등록돼 있다.
+
+```text
+callbacks
+
+1 → A
+```
+
+rAF callback 실행을 시작할 때 현재 key를 가져온다.
+
+```text
+callbackHandles = [1]
+```
+
+이후 `A`가 실행되고, 그 안에서 새로운 rAF를 등록한다.
+
+```text
+callbacks
+
+2 → B
+```
+
+하지만 이번에 순회할 `callbackHandles`는 이미 `[1]`로 정해졌다.
+
+`B`는 다음 렌더링 업데이트에서 실행된다.
+
+```text
+첫 번째 rendering update
+
+callbackHandles = [1]
+
+1 → A 실행
+    └─ requestAnimationFrame(B)
+       2 → B 등록
+
+        ↓
+
+callbackHandles 순회 종료
+
+
+다음 rendering update
+
+callbackHandles = [2]
+
+2 → B 실행
+```
+
+그래서 다음과 같은 animation loop가 동작한다.
+
+```ts
+const animate = (timestamp: number) => {
+  update(timestamp);
+
+  requestAnimationFrame(animate);
+};
+
+requestAnimationFrame(animate);
+```
+
+`requestAnimationFrame()` 자체는 반복 실행 API가 아니다.
+
+한 번 등록하면 한 번 실행되는 **one-shot callback**이고, callback 안에서 다시 `requestAnimationFrame()`을 호출하면서 다음 프레임을 계속 요청하는 구조다.
+
+---
+
+## 같은 프레임에서 callback을 취소하면 어떻게 될까?
+
+handle 목록을 미리 만들어 둔다면 또 다른 궁금증이 생긴다.
+
+이번 프레임에서 실행할 목록을 이미 얻은 뒤에 `cancelAnimationFrame()`을 호출하면 어떻게 될까?
+
+```ts
+let secondId = 0;
+
+requestAnimationFrame(() => {
+  console.log('A');
+
+  cancelAnimationFrame(secondId);
+});
+
+secondId = requestAnimationFrame(() => {
+  console.log('B');
+});
+```
+
+처음 상태는 다음과 같다.
+
+```text
+callbacks
+
+1 → A
+2 → B
+```
+
+실행을 시작하면서 key 목록을 가져온다.
+
+```text
+callbackHandles = [1, 2]
+```
+
+이제 `[1, 2]`가 이미 만들어졌으니 `B`도 무조건 실행될 것처럼 보인다.
+
+하지만 `A` 안에서 다음 코드가 실행된다.
+
+```ts
+cancelAnimationFrame(2);
+```
+
+callback map에서 `2`가 제거된다.
+
+이후 브라우저가 `handle = 2`를 처리할 차례가 되었을 때 바로 callback을 호출하지 않는다.
+
+먼저 해당 handle이 callbacks에 **아직 존재하는지 확인한다.**
+
+이미 제거됐으므로 `B`는 실행되지 않는다.
+
+```text
+callbackHandles = [1, 2]
+              │
+              ▼
+        1 → A 실행
+              │
+              └─ cancelAnimationFrame(2)
+                         │
+                         ▼
+                  callbacks에서 2 제거
+                         │
+                         ▼
+        handle = 2 처리
+                         │
+                         ▼
+             callbacks에 2가 있는가?
+                         │
+                        No
+                         │
+                         ▼
+                       Skip
+```
+
+이 구조가 꽤 흥미롭다.
+
+이번 frame에서 실행할 **handle 목록은 미리 확정**하고, 실제 실행 직전에는 **callback이 아직 유효한지 다시 확인**한다.
+
+그래서 두 동작을 동시에 만족할 수 있다.
+
+```text
+실행 중 새로 등록된 callback
+→ handle 목록에 없으므로 다음 frame
+
+실행 전에 취소된 callback
+→ handle 목록에는 있지만 Map에 없으므로 실행하지 않음
+```
+
+rAF callback을 왜 이런 방식으로 관리하는지 스펙을 따라가다 보면 자연스럽게 이해되는 부분이다.
+
+---
+
+## 그런데 왜 이런 별도 구조가 필요한 걸까?
+
+여기까지 보면 다른 질문이 생긴다.
+
+JavaScript에는 이미 비동기 callback을 실행할 방법이 많다.
+
+```ts
+setTimeout(callback, 16);
+
+queueMicrotask(callback);
+
+Promise.resolve().then(callback);
+```
+
+그런데 브라우저는 왜 `requestAnimationFrame`이라는 별도의 API를 만들었을까?
+
+60Hz 디스플레이에서는 한 프레임이 약 `16.67ms`니까 다음 코드와 큰 차이가 없어 보이기도 한다.
+
+```ts
+setTimeout(callback, 16);
+```
+
+하지만 두 API는 애초에 스케줄링 기준이 다르다.
+
+---
+
+## setTimeout은 시간을 기다린다
+
+```ts
+setTimeout(callback, 16);
+```
+
+이 코드는 `16ms 후 정확히 callback을 실행해달라`는 의미가 아니다.
+
+지정한 시간이 지나면 callback을 실행할 수 있는 상태가 될 뿐이다. 그 시점에 메인 스레드가 다른 Task를 처리하고 있다면 실행은 더 늦어진다.
+
+```text
+0ms
+setTimeout(callback, 16)
+
+│
+│ 메인 스레드에서 긴 Task 실행 중
+│
+16ms  ← timeout 조건은 만족
+│
+│ 아직 기존 Task 실행 중
+│
+│
+28ms  ← 기존 Task 종료
+│
+▼
+callback 실행 가능
+```
+
+`16ms`는 실행 시각을 예약하는 값이 아니라 최소 지연 시간에 가깝다.
+
+---
+
+## rAF는 렌더링 시점을 기다린다
+
+`requestAnimationFrame`에는 delay를 지정하는 인자가 없다.
+
+```ts
+requestAnimationFrame(callback);
+```
+
+대신 브라우저의 다음 렌더링 업데이트에 callback을 등록한다.
+
+두 API를 나란히 놓으면 차이가 조금 더 분명하다.
+
+| API | 실행 기준 | callback 관리 | 주된 용도 |
+| --- | --- | --- | --- |
+| `setTimeout` | 시간 | Timer 관련 상태와 Task | 일정 시간이 지난 뒤 작업 |
+| `queueMicrotask` | 현재 JavaScript 실행 | Microtask Queue | 현재 작업 직후 처리 |
+| `requestAnimationFrame` | Rendering opportunity | animation frame callback ordered map | 다음 화면 갱신 준비 |
+
+`setTimeout`과 rAF는 어느 쪽이 더 정확한 Timer인지 비교할 대상이 아니다.
+
+**무엇을 기준으로 실행할지를 브라우저에게 전달하는 방식부터 다르다.**
+
+---
+
+## rAF는 16ms마다 실행되는 API가 아니다
+
+rAF를 설명하면서 `16ms`라는 숫자가 자주 등장한다.
+
+60Hz 디스플레이가 1초에 약 60번 화면을 갱신하기 때문이다.
+
+```text
+1000ms / 60 ≈ 16.67ms
+```
+
+하지만 모든 디스플레이가 60Hz인 것은 아니다.
+
+```text
+60Hz  → 약 16.67ms
+120Hz → 약 8.33ms
+144Hz → 약 6.94ms
+```
+
+rAF가 정말 16ms 간격으로 고정된 API라면 120Hz나 144Hz 디스플레이의 주사율을 제대로 활용할 수 없을 것이다.
+
+이 차이는 애니메이션 코드를 작성할 때도 드러난다.
+
+```ts
+let x = 0;
+
+const animate = () => {
+  x += 10;
+
+  element.style.transform = `translateX(${x}px)`;
+
+  requestAnimationFrame(animate);
+};
+
+requestAnimationFrame(animate);
+```
+
+위 코드는 매 frame마다 위치를 `10px`씩 증가시킨다.
+
+60fps라면 1초 동안 약 `600px`을 이동하지만 120fps에서는 약 `1200px`을 이동할 수 있다.
+
+같은 코드인데 디스플레이 환경에 따라 애니메이션 속도가 달라지는 셈이다.
+
+---
+
+## 그래서 callback에는 timestamp가 전달된다
+
+rAF callback은 timestamp를 인자로 받는다.
+
+```ts
+requestAnimationFrame((timestamp) => {
+  console.log(timestamp);
+});
+```
+
+프레임 횟수가 아니라 실제 경과 시간을 기준으로 상태를 계산할 수 있게 해주는 값이다.
+
+예를 들어 다음처럼 사용할 수 있다.
+
+```ts
+let previousTime: number | null = null;
+let position = 0;
+
+const velocity = 0.1;
+
+const animate = (timestamp: number) => {
+  if (previousTime !== null) {
+    const deltaTime = timestamp - previousTime;
+
+    position += velocity * deltaTime;
+
+    element.style.transform = `translateX(${position}px)`;
+  }
+
+  previousTime = timestamp;
+
+  requestAnimationFrame(animate);
+};
+
+requestAnimationFrame(animate);
+```
+
+이제 이동 거리는 프레임 횟수가 아니라 시간에 따라 결정된다.
+
+```text
+경과 시간 × 속도
+```
+
+디스플레이가 60Hz인지 120Hz인지와 관계없이 같은 시간이 흘렀다면 비슷한 거리를 이동하게 된다.
+
+같은 frame에서 실행되는 여러 rAF callback이 동일한 frame timestamp를 사용할 수 있다는 점도 여러 애니메이션을 같은 시간축에 맞추는 데 도움이 된다.
+
+---
+
+## setTimeout으로 애니메이션을 만들면 어떤 차이가 생길까?
+
+다시 `setTimeout`을 이용한 애니메이션을 보자.
+
+```ts
+const animate = () => {
+  update();
+
+  setTimeout(animate, 16);
+};
+
+animate();
+```
+
+Timer와 디스플레이 refresh는 서로 다른 기준으로 움직인다.
+
+디스플레이가 아래 시점에 갱신된다고 가정해보자.
+
+```text
+Display
+
+0        16.7        33.3        50.0
+│          │           │           │
+Frame      Frame       Frame       Frame
+```
+
+Timer callback은 메인 스레드 상황에 따라 다른 시점에 실행될 수 있다.
+
+```text
+Timer
+
+    5           24      38              57
+    │           │       │               │
+ update       update  update          update
+```
+
+어떤 update는 화면 갱신 직전에 실행되고, 어떤 update는 화면이 갱신된 직후 실행된다.
+
+경우에 따라 한 번의 화면 갱신 사이에서 JavaScript가 여러 번 상태를 계산할 수도 있다.
+
+```text
+update
+  ↓
+update
+  ↓
+update
+  ↓
+Paint
+```
+
+중간 상태는 실제 화면에 표시되지 않았는데 계산은 이미 끝낸 셈이다.
+
+rAF는 렌더링을 위한 JavaScript 작업을 브라우저의 렌더링 주기와 맞출 수 있게 해준다.
+
+```text
+Rendering Opportunity
+        ↓
+rAF callback
+        ↓
+Rendering
+
+Rendering Opportunity
+        ↓
+rAF callback
+        ↓
+Rendering
+```
+
+---
+
+## rAF를 사용한다고 60fps가 보장되는 건 아니다
+
+rAF를 사용하면 브라우저가 적절한 실행 시점을 잡아주지만 callback 자체가 빨라지는 것은 아니다.
+
+```ts
+requestAnimationFrame(() => {
+  heavyWork();
+});
+```
+
+60Hz 환경에서 한 frame에 사용할 수 있는 시간이 약 `16.67ms`라고 해보자.
+
+rAF callback이 `30ms` 동안 메인 스레드를 점유하면 다음 frame을 제시간에 준비할 수 없다.
+
+```text
+Frame budget 약 16.7ms
+
+|-----------------|
+
+rAF callback
+|--------------------------------30ms--------------------------------|
+
+                         ↓
+
+                    Frame Miss
+```
+
+rAF가 제공하는 것은 더 빠른 JavaScript 실행이 아니라 **렌더링에 맞는 실행 시점**이다.
+
+---
+
+## background tab에서는 어떻게 될까?
+
+사용자에게 보이지 않는 페이지에서 초당 수십 번씩 애니메이션 좌표를 계산할 필요는 없다.
+
+그래서 대부분의 브라우저는 background tab이나 hidden iframe에서 rAF callback을 일시 중지하거나 실행 빈도를 낮춘다.
+
+이때 `setTimeout`과 단순히
+
+```text
+setTimeout은 계속 실행된다.
+rAF는 멈춘다.
+```
+
+라고 비교하는 것도 정확하지 않다.
+
+Timer 역시 background tab에서 throttling을 받을 수 있다.
+
+차이는 각 API가 무엇을 기준으로 동작하는지에 있다.
+
+Timer는 시간에 따라 작업을 예약하고, rAF는 렌더링 업데이트에 참여할 callback을 등록한다. 화면을 그릴 필요가 줄어들면 rAF 호출 빈도 역시 자연스럽게 줄일 수 있다.
+
+---
+
+## Microtask와는 무엇이 다를까?
+
+처음의 코드로 돌아가보자.
+
+```ts
+queueMicrotask(() => {
+  console.log('microtask');
+});
+
+requestAnimationFrame(() => {
+  console.log('raf');
+});
+```
+
+둘을 `Microtask Queue`와 `Animation Frame Queue`의 경쟁으로 보면 실제 구조와 맞지 않는다.
+
+Microtask는 Event Loop의 **Microtask Queue**에 enqueue되고, 브라우저가 microtask checkpoint를 수행할 때 Queue에서 꺼내 실행된다.
+
+rAF는 다른 경로를 따른다.
+
+```text
+requestAnimationFrame(callback)
+                │
+                ▼
+Document의 ordered map에 callback 등록
+                │
+                ▼
+Rendering Opportunity
+                │
+                ▼
+Rendering Task
+                │
+                ▼
+Update the Rendering
+                │
+                ▼
+Animation Frame Callback 실행
+```
+
+rAF를 `Microtask보다 느린 Task`처럼 이해해서는 안 되는 이유다.
+
+둘은 우선순위가 다른 Queue가 아니라 **서로 다른 시점의 작업을 예약하기 위한 스케줄링 방식**이다.
+
+---
+
+## setTimeout과 rAF 중 무엇이 먼저 실행될까?
+
+그럼 다음 코드의 출력 순서는 어떨까?
+
+```ts
+setTimeout(() => {
+  console.log('timeout');
+}, 0);
+
+requestAnimationFrame(() => {
+  console.log('raf');
+});
+```
+
+`timeout → raf` 혹은 `raf → timeout` 중 하나를 규칙처럼 외우고 싶어질 수 있다.
+
+하지만 둘 사이에는 항상 고정된 실행 순서가 있는 게 아니다.
+
+Timer callback은 Timer와 관련된 Task를 통해 실행되고, rAF callback은 rendering opportunity가 발생해 `update the rendering`이 처리될 때 실행된다.
+
+따라서 실제 순서는 현재 Event Loop의 상태와 rendering opportunity가 언제 발생했는지에 따라 달라질 수 있다.
+
+브라우저가 렌더링을 생략할 수도 있고, 여러 Timer callback을 중간 렌더링 없이 처리할 수도 있다.
+
+이 때문에 Event Loop를 다음처럼 세 개의 Queue가 순서대로 비워지는 구조로 생각하면 곤란하다.
+
+```text
+Task Queue
+    ↓
+Microtask Queue
+    ↓
+rAF Queue
+```
+
+rAF에는 일반 Task와 다른 렌더링 스케줄이 연결돼 있다.
+
+---
+
+## rAF 안에서 DOM을 변경하면 무조건 성능이 좋아질까?
+
+rAF가 렌더링하기 좋은 시점을 잡아준다고 해서 callback 안의 코드까지 자동으로 최적화되는 것은 아니다.
+
+다음 코드를 보자.
+
+```ts
+requestAnimationFrame(() => {
+  element.style.width = '100px';
+
+  const width = element.offsetWidth;
+
+  element.style.width = `${width + 100}px`;
+
+  const nextWidth = element.offsetWidth;
+
+  console.log(nextWidth);
+});
+```
+
+DOM을 변경한 뒤 곧바로 layout 값을 읽고, 다시 DOM을 변경한 뒤 또 layout을 읽고 있다.
+
+```text
+DOM Write
+   ↓
+DOM Read
+   ↓
+필요하다면 Style / Layout 계산
+   ↓
+DOM Write
+   ↓
+DOM Read
+   ↓
+다시 계산
+```
+
+`offsetWidth`처럼 현재 layout 값을 요구하는 API를 호출하면 브라우저는 정확한 값을 반환하기 위해 미뤄두었던 계산을 먼저 수행해야 할 수 있다.
+
+rAF 안에서도 Layout Thrashing이 생길 수 있다는 뜻이다.
+
+가능하다면 읽기와 쓰기를 분리하는 편이 낫다.
+
+```ts
+requestAnimationFrame(() => {
+  const width = element.offsetWidth;
+  const nextWidth = width + 100;
+
+  element.style.width = `${nextWidth}px`;
+});
+```
+
+rAF가 해결하는 것은 DOM을 어떻게 변경해야 하는지에 대한 문제가 아니다.
+
+**렌더링과 관련된 작업을 언제 실행할지 정하는 문제에 가깝다.**
+
+---
+
+## 다시 처음으로 돌아가면
+
+`requestAnimationFrame(callback)`을 호출한 뒤 실제 실행까지의 흐름을 단순화하면 다음과 같다.
+
+```text
+requestAnimationFrame(callback)
+              │
+              ▼
+animation frame callback identifier 증가
+              │
+              ▼
+Document의
+map of animation frame callbacks에
+handle → callback 등록
+              │
+              ▼
+      Rendering Opportunity
+              │
+              ▼
+     rendering task source
+              │
+              ▼
+     Update the Rendering
+              │
+              ▼
+callback Map의 key 목록을 가져옴
+              │
+              ▼
+각 callback이 아직 유효한지 확인
+              │
+              ▼
+Map에서 제거한 뒤 실행
+              │
+              ▼
+      Style / Layout 갱신
+              │
+              ▼
+          화면 업데이트
+```
+
+처음에는 `requestAnimationFrame`도 Task Queue나 Microtask Queue 어딘가에 들어갈 거라고 생각했다.
+
+하지만 rAF는 JavaScript callback을 단순히 나중으로 미루는 API가 아니었다.
+
+`setTimeout`은 시간을 기준으로 작업을 예약하고, Microtask는 현재 JavaScript 실행이 끝난 뒤 처리할 작업을 예약한다. rAF는 다음 렌더링 업데이트에서 처리할 callback을 등록한다.
+
+특히 스펙의 callback 실행 알고리즘을 따라가 보면 평소에는 당연하게 사용했던 동작들도 이유가 보인다.
+
+```text
+현재 callback handle 목록을 먼저 가져온다.
+→ callback이 여전히 등록돼 있는지 확인한다.
+→ Map에서 제거한다.
+→ callback을 실행한다.
+```
+
+덕분에 rAF 안에서 새로 등록한 callback은 다음 frame으로 넘어가고, 이미 이번 frame의 handle 목록에 포함됐더라도 실행 전에 취소한 callback은 호출되지 않는다.
+
+`requestAnimationFrame`을 `16ms마다 실행되는 callback`이라고만 생각하면 이런 구조가 잘 보이지 않는다.
+
+내가 rAF를 이해하면서 가장 크게 바뀐 부분도 여기였다.
+
+> `requestAnimationFrame`은 "16ms 뒤에 실행해줘"가 아니라 **"다음 화면을 갱신할 때 이 작업도 같이 처리해줘"**에 더 가까운 API다.
+
+이 관점으로 보면 `setTimeout`, Microtask, rAF는 단순히 실행 순서가 다른 비동기 API가 아니다. 각자 서로 다른 시점에 필요한 작업을 브라우저에 전달하기 위해 존재한다.
+
+---
+
+## 참고 자료
+
+- [WHATWG HTML Living Standard - Animation frames](https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html)
+- [WHATWG HTML Living Standard - Event loops / Update the rendering](https://html.spec.whatwg.org/multipage/webappapis.html)
+- [WHATWG HTML Living Standard - Timers](https://html.spec.whatwg.org/multipage/timers.html)
+- [MDN - Window.requestAnimationFrame()](https://developer.mozilla.org/docs/Web/API/Window/requestAnimationFrame)
+- [MDN - Window.setTimeout()](https://developer.mozilla.org/docs/Web/API/Window/setTimeout)
